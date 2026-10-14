@@ -36,6 +36,11 @@ export default defineConfig({
         target: 'http://192.168.50.30:8080',
         changeOrigin: true,
       },
+      // 历史消息里可能是相对路径 /uploads/...；必须代理，否则只有本机直连后端时能看图
+      '/uploads': {
+        target: 'http://192.168.50.30:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

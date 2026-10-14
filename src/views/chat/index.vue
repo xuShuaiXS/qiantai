@@ -25,6 +25,7 @@ import {
 } from '@/api/chat'
 import { useAuthStore } from '@/stores/auth'
 import { renderMarkdown } from '@/utils/markdown'
+import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl'
 import ComposerBox, { type PendingImage } from './components/ComposerBox.vue'
 import {
   DEFAULT_IMAGE_SIZE,
@@ -132,7 +133,8 @@ function parseStoredImages(raw?: string): string[] {
   if (!raw) return []
   try {
     const v = JSON.parse(raw)
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x) : []
+    const list = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x) : []
+    return resolveMediaUrls(list)
   } catch {
     return []
   }
@@ -143,7 +145,7 @@ function toApiContent(m: ChatMessage): string | ChatContentPart[] {
   const parts: ChatContentPart[] = []
   if (m.content.trim()) parts.push({ type: 'text', text: m.content })
   for (const url of m.images) {
-    parts.push({ type: 'image_url', image_url: { url } })
+    parts.push({ type: 'image_url', image_url: { url: resolveMediaUrl(url) } })
   }
   return parts
 }
@@ -736,7 +738,7 @@ async function send(fromDock = false, text?: string) {
       if (msg) {
         const revised = cleanDisplayText(result.revisedPrompt || '')
         msg.content = revised ? `已生成（提示词已优化）：${revised}` : '已生成图片'
-        msg.images = result.images || []
+        msg.images = resolveMediaUrls(result.images || [])
         msg.waiting = false
         if (!msg.images.length) {
           msg.content = '生图未返回图片，请检查厂商配置与额度，或换一种描述后重试'

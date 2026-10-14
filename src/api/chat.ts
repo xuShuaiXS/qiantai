@@ -1,4 +1,5 @@
 import { clearToken, getToken } from './auth'
+import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl'
 
 export type ChatContentPart =
   | { type: 'text'; text: string }
@@ -86,14 +87,14 @@ export async function fetchModelFamilies(): Promise<ModelFamily[]> {
 }
 
 /** 文生图：代理上游 /images/generations，返回已落盘的图片 URL */
-export function generateImage(payload: {
+export async function generateImage(payload: {
   model: string
   prompt: string
   n?: number
   size?: string
   signal?: AbortSignal
-}) {
-  return apiJSON<ImageGenerationResult>('/chat/images/generations', {
+}): Promise<ImageGenerationResult> {
+  const data = await apiJSON<ImageGenerationResult>('/chat/images/generations', {
     method: 'POST',
     body: JSON.stringify({
       model: payload.model,
@@ -103,6 +104,10 @@ export function generateImage(payload: {
     }),
     signal: payload.signal,
   })
+  return {
+    ...data,
+    images: resolveMediaUrls(data.images),
+  }
 }
 
 export interface ChatSessionItem {
@@ -185,7 +190,7 @@ export async function uploadChatImage(file: File): Promise<string> {
   if (body.code !== 0) throw new Error(body.message || '上传失败')
   const url = body.data?.url as string
   if (!url) throw new Error('上传成功但未返回地址')
-  return url
+  return resolveMediaUrl(url)
 }
 
 /** 流式对话：解析 OpenAI 兼容 SSE，逐段回调 content */
