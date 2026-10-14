@@ -8,28 +8,41 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
+const mode = ref<'login' | 'register'>('login')
 
 const form = reactive({
-  username: 'admin',
-  password: '123456',
+  username: '',
+  password: '',
+  nickname: '',
 })
 
 async function submit() {
+  if (loading.value) return
   if (!form.username || !form.password) {
-    ElMessage.warning('请输入账号和密码')
+    ElMessage.warning(mode.value === 'register' ? '请输入用户名和密码' : '请输入账号和密码')
     return
   }
   loading.value = true
   try {
-    await auth.login(form.username, form.password)
-    ElMessage.success('登录成功')
+    if (mode.value === 'register') {
+      await auth.register(form.username, form.password, form.nickname)
+      ElMessage.success('注册成功')
+    } else {
+      await auth.login(form.username, form.password)
+      ElMessage.success('登录成功')
+    }
     const redirect = (route.query.redirect as string) || '/'
     await router.replace(redirect)
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '登录失败')
+    ElMessage.error(e instanceof Error ? e.message : mode.value === 'register' ? '注册失败' : '登录失败')
   } finally {
     loading.value = false
   }
+}
+
+function switchMode(next: 'login' | 'register') {
+  mode.value = next
+  form.password = ''
 }
 </script>
 
@@ -37,11 +50,20 @@ async function submit() {
   <div class="chat-login">
     <div class="chat-login__panel">
       <div class="chat-login__brand">极光AI</div>
-      <h1>登录后开始对话</h1>
-      <p>与控制台共用同一账号，登录后即可调用后台已配置的模型。</p>
+      <h1>{{ mode === 'login' ? '登录后开始对话' : '注册账号' }}</h1>
+      <p>
+        {{
+          mode === 'login'
+            ? '前台用户账号与运营控制台分离；演示账号 demo / 123456。'
+            : '用户名 3–32 位字母数字下划线，密码至少 6 位。'
+        }}
+      </p>
       <el-form label-position="top" @submit.prevent="submit">
-        <el-form-item label="账号">
-          <el-input v-model="form.username" size="large" placeholder="admin" />
+        <el-form-item label="用户名">
+          <el-input v-model="form.username" size="large" placeholder="如 demo" autocomplete="username" />
+        </el-form-item>
+        <el-form-item v-if="mode === 'register'" label="昵称（可选）">
+          <el-input v-model="form.nickname" size="large" placeholder="显示名称" />
         </el-form-item>
         <el-form-item label="密码">
           <el-input
@@ -50,13 +72,23 @@ async function submit() {
             show-password
             size="large"
             placeholder="密码"
-            @keyup.enter="submit"
+            autocomplete="current-password"
           />
         </el-form-item>
-        <el-button type="primary" size="large" :loading="loading" style="width: 100%" @click="submit">
-          进入对话
+        <el-button type="primary" size="large" native-type="submit" :loading="loading" style="width: 100%">
+          {{ mode === 'login' ? '进入对话' : '注册并进入' }}
         </el-button>
       </el-form>
+      <div class="chat-login__switch">
+        <template v-if="mode === 'login'">
+          没有账号？
+          <button type="button" @click="switchMode('register')">去注册</button>
+        </template>
+        <template v-else>
+          已有账号？
+          <button type="button" @click="switchMode('login')">去登录</button>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -98,5 +130,21 @@ async function submit() {
   margin-bottom: 24px;
   color: #595959;
   line-height: 1.7;
+}
+
+.chat-login__switch {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.chat-login__switch button {
+  border: none;
+  background: none;
+  color: #1677ff;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
 }
 </style>

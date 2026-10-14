@@ -13,32 +13,48 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-export interface AdminProfile {
+export interface UserProfile {
   id: number
   username: string
   nickname: string
-  isSuper: boolean
 }
 
-export interface LoginResult {
+export interface AuthResult {
   token: string
   expiresAt: string
-  admin: AdminProfile
+  user: UserProfile
 }
 
-export async function loginApi(username: string, password: string): Promise<LoginResult> {
-  const res = await fetch(`${baseURL}/admin/auth/login`, {
+async function parseAuthBody(res: Response, fallback: string): Promise<AuthResult> {
+  const body = await res.json()
+  if (body.code !== 0) throw new Error(body.message || fallback)
+  return body.data
+}
+
+export async function loginApi(username: string, password: string): Promise<AuthResult> {
+  const res = await fetch(`${baseURL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   })
-  const body = await res.json()
-  if (body.code !== 0) throw new Error(body.message || '登录失败')
-  return body.data
+  return parseAuthBody(res, '登录失败')
 }
 
-export async function meApi(): Promise<AdminProfile> {
-  const res = await fetch(`${baseURL}/admin/auth/me`, {
+export async function registerApi(
+  username: string,
+  password: string,
+  nickname?: string,
+): Promise<AuthResult> {
+  const res = await fetch(`${baseURL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, nickname: nickname || '' }),
+  })
+  return parseAuthBody(res, '注册失败')
+}
+
+export async function meApi(): Promise<UserProfile> {
+  const res = await fetch(`${baseURL}/auth/me`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
   const body = await res.json()
