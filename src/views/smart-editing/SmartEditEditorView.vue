@@ -172,9 +172,8 @@ async function send() {
 <style scoped>
 .editor {
   display: flex;
-  /* 独立路由页，无外层顶栏，直接占满视口（原实现为 calc(100vh - 顶栏高度)） */
-  height: 100vh;
-  height: 100dvh;
+  /* 位于 ToolsShell 的内容区内：撑满剩余高度（外壳已定高 100dvh） */
+  height: 100%;
   width: 100%;
   min-width: 0;
   overflow: hidden;
@@ -259,7 +258,7 @@ async function send() {
 
 /* ---------------- 响应式 ---------------- */
 @media (max-width: 960px) {
-  .editor { flex-direction: column; height: auto; min-height: 100dvh; overflow: auto; }
+  .editor { flex-direction: column; height: auto; min-height: 100%; overflow: auto; }
   .editor-canvas { min-height: 72vh; }
   .editor-side { width: auto; flex: none; border-left: 0; border-top: 1px solid rgba(255, 255, 255, .08); }
   .side-empty { padding: 40px 0; }

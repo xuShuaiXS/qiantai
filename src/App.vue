@@ -8,8 +8,12 @@ const router = useRouter()
 /**
  * 从 oademo 移植过来的栏目页（图片生成 / 智能修图）是独立路由，
  * 不套在对话页的侧边栏布局内，这里给它们补一个回到对话页的入口。
+ * 注：栏目页已改为带侧栏的 ToolsShell 布局（meta.shell === 'tools'），
+ * 此时侧栏本身就能返回对话页，无需再显示浮动按钮。
  */
-const showBackHome = computed(() => route.meta.public === true && route.path !== '/login')
+const showBackHome = computed(
+  () => route.meta.public === true && route.meta.shell !== 'tools' && route.path !== '/login',
+)
 </script>
 
 <template>

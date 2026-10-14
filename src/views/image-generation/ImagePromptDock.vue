@@ -24,10 +24,9 @@ const advancedVisible = ref(false)
 const placeholder = computed(() => props.selectedEffect?.hint || '描述你的创意灵感，极光AI 会将文字变成画面…')
 const canGenerate = computed(() => props.form.prompt.trim().length >= 4 && !props.submitting)
 /**
- * 独立页面无侧边栏，不需要左侧宽度补偿。
- * 原实现位于带侧栏的 OA 布局中，这里改为常量以保持模板结构不变。
+ * 左侧让位：外层 ToolsShell 会把侧栏宽度写入全局变量 --tools-sider-w，
+ * .dock-layer 用它做 fixed 定位的 left 偏移（移动端媒体查询里归零）。
  */
-const layerPadding = '0px'
 const countOptions = [1, 2, 3, 4].map((value) => ({ value, label: `${value} 张` }))
 const sizeOptions = computed(() => IMAGE_SIZES.map((item) => ({ value: item.value, label: item.label, desc: `${item.width}×${item.height}` })))
 
@@ -42,7 +41,7 @@ function uploadImage() {
 
 <template>
   <Teleport to="body">
-    <div class="dock-layer" :style="{ paddingLeft: layerPadding }">
+    <div class="dock-layer">
       <section class="prompt-dock" :class="{ 'has-effect': selectedEffect }">
         <!-- 选中效果后的提示信息条 -->
         <div v-if="selectedEffect" class="prompt-dock__effect-tip">
@@ -84,7 +83,7 @@ function uploadImage() {
 
 <style scoped>
 /* 固定悬浮层：始终贴合视口底部，内容区居中 */
-.dock-layer { position: fixed; left: 0; right: 0; bottom: 16px; z-index: 900; display: flex; justify-content: center; padding: 0 20px; pointer-events: none; }
+.dock-layer { position: fixed; left: var(--tools-sider-w, 0px); right: 0; bottom: 16px; z-index: 900; display: flex; justify-content: center; padding: 0 20px; pointer-events: none; }
 .prompt-dock { position: relative; width: 100%; max-width: 900px; padding: 12px 16px 12px; border: 1px solid var(--c-primary-border); border-radius: var(--radius-lg); background: #fff; box-shadow: 0 -2px 10px rgba(38, 64, 105, .05), var(--shadow-lg); pointer-events: auto; transition: border-color .2s ease, box-shadow .2s ease; }
 .prompt-dock.has-effect { border-color: var(--c-primary); box-shadow: 0 -2px 10px rgba(38, 64, 105, .05), 0 0 0 3px rgba(22, 119, 255, .1), var(--shadow-lg); }
 .prompt-dock__input { display: block; width: 100%; min-height: 52px; max-height: 132px; border: 0; background: transparent; resize: none; font-size: 14px; line-height: 1.6; color: var(--c-text); }
@@ -116,7 +115,7 @@ function uploadImage() {
 .prompt-dock__effect-close:hover { color: var(--c-danger); }
 
 /* 响应式：窄屏缩短两侧留白、工具栏允许换行，保证固定栏始终完整可见 */
-@media (max-width: 900px) { .dock-layer { padding-right: 14px; } .prompt-dock__options { gap: 6px; } .dock-btn { padding: 0 8px; } }
+@media (max-width: 900px) { .dock-layer { padding-right: 14px; left: 0; } .prompt-dock__options { gap: 6px; } .dock-btn { padding: 0 8px; } }
 @media (max-width: 720px) {
   .dock-layer { bottom: 10px; padding-right: 10px; }
   .prompt-dock { padding: 10px 12px; }
