@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import FeatureToast from './components/FeatureToast.vue'
 import SideNav from './components/SideNav.vue'
+import HistoryDrawer from './components/HistoryDrawer.vue'
 import ModelPicker from './components/ModelPicker.vue'
 import SeriesCarousel from './components/SeriesCarousel.vue'
 import ImageGenPlaceholder from './components/ImageGenPlaceholder.vue'
@@ -61,6 +62,7 @@ const {
 const bannerHidden = ref(false)
 const siderCollapsed = ref(false)
 const siderOpen = ref(false)
+const historyOpen = ref(false)
 const activeNavKey = ref('chat')
 const modelPanelOpen = ref(false)
 const quickMoreOpen = ref(false)
@@ -106,6 +108,7 @@ const messages = computed<ChatMessage[]>(() => {
 })
 
 const inChat = computed(() => messages.value.length > 0)
+const isChatPage = computed(() => activeNavKey.value === 'chat')
 const streaming = computed(() => isRunning(currentSessionId.value))
 const sessionBadges = computed(() => badgeMap())
 
@@ -468,6 +471,12 @@ async function removeSessions(ids: number[]) {
     showToast('删除失败')
     toastDesc.value = e instanceof Error ? e.message : '请稍后重试'
   }
+}
+
+async function clearAllSessions() {
+  const ids = sessions.value.map((s) => s.id)
+  if (!ids.length) return
+  await removeSessions(ids)
 }
 
 function selectModel(m: ModelItem) {
@@ -1083,16 +1092,24 @@ onUnmounted(() => {
           :collapsed="siderCollapsed"
           :open="siderOpen"
           :active-key="activeNavKey"
-          :history="sessions"
           :active-session-id="currentSessionId"
-          :session-badges="sessionBadges"
           @toggle-collapse="siderCollapsed = !siderCollapsed"
           @new-chat="siderOpen = false; newChat()"
           @select="onNavSelect"
+        />
+
+        <HistoryDrawer
+          :open="historyOpen"
+          :history="sessions"
+          :active-session-id="currentSessionId"
+          :session-badges="sessionBadges"
+          @close="historyOpen = false"
+          @refresh="loadSessions"
           @select-session="openSession"
           @delete-session="removeSession"
           @batch-delete-sessions="removeSessions"
           @rename-session="onRenameSession"
+          @clear-all="clearAllSessions"
         />
 
         <section class="main">
@@ -1104,6 +1121,15 @@ onUnmounted(() => {
               <img :src="LOGO" alt="" />
               极光AI
             </div>
+            <button
+              class="icon-btn mobile-history"
+              type="button"
+              title="历史记录"
+              aria-label="历史记录"
+              @click="historyOpen = true"
+            >
+              <i class="ri-history-line"></i>
+            </button>
           </div>
 
           <header class="topbar">
@@ -1157,14 +1183,39 @@ onUnmounted(() => {
               <button class="icon-btn" type="button" title="设置">
                 <i class="ri-settings-3-line"></i>
               </button>
-              <button class="user-entry" type="button">
-                <span class="av">游</span>
-                <span class="uname">游客</span>
-              </button>
+              <div class="user-cluster">
+                <button class="user-entry" type="button">
+                  <span class="av">游</span>
+                  <span class="uname">游客</span>
+                </button>
+                <button
+                  class="history-entry"
+                  type="button"
+                  title="历史记录"
+                  :class="{ active: historyOpen }"
+                  @click="historyOpen = !historyOpen"
+                >
+                  <i class="ri-history-line"></i>
+                  <span>历史</span>
+                </button>
+              </div>
             </div>
           </header>
 
-          <div ref="workspaceRef" class="workspace" @scroll="onWorkspaceScroll" @click="onMdClick">
+          <div
+            v-if="!isChatPage"
+            class="feature-blank"
+          >
+            <!-- 能力页暂未实现，先留白占位 -->
+          </div>
+
+          <div
+            v-show="isChatPage"
+            ref="workspaceRef"
+            class="workspace"
+            @scroll="onWorkspaceScroll"
+            @click="onMdClick"
+          >
             <div class="ws-inner">
               <div v-show="!inChat" class="welcome">
                 <div class="hero">
@@ -1429,7 +1480,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="composer-dock" :class="{ show: inChat }">
+          <div class="composer-dock" :class="{ show: isChatPage && inChat }">
             <ComposerBox
               ref="composerDockRef"
               v-model="inputDock"

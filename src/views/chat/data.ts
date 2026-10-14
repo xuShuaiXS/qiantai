@@ -140,6 +140,7 @@ export const navSections: NavSection[] = [
         icon: "https://file.1foo.com/2024/09/12/d6de1893c2bbd61cf16a9a0e29928c3d.svg",
         tag: "1000+功能",
         tagCls: "tag-num",
+        page: true,
       },
       {
         name: "超级智能体",
