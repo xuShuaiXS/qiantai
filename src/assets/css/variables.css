@@ -1,0 +1,15 @@
+:root {
+  --app-color-primary: #1677ff;
+  --app-color-primary-hover: #4096ff;
+  --app-bg-page: #f7f8fa;
+  --app-bg-sider: rgb(17, 20, 45);
+  --app-text-primary: #262626;
+  --app-text-regular: #595959;
+  --app-text-secondary: #8c8c8c;
+  --app-border-color: #f0f0f0;
+  --app-radius-sm: 6px;
+  --app-radius-md: 10px;
+  --app-radius-lg: 14px;
+  --app-font-sans: 'AlibabaPuHuiTi', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui,
+    -apple-system, sans-serif;
+}
