@@ -23,7 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggleCollapse: []
   newChat: []
-  select: [payload: { key: string; name: string; page?: boolean }]
+  select: [payload: { key: string; name: string; page?: boolean; route?: string }]
   selectSession: [id: number]
   deleteSession: [id: number]
   batchDeleteSessions: [ids: number[]]
@@ -357,7 +357,7 @@ function setRenameInputEl(el: unknown) {
             :class="{ active: it.key === activeKey && !activeSessionId }"
             href="javascript:;"
             :title="it.name"
-            @click.prevent="emit('select', { key: it.key, name: it.name, page: it.page })"
+            @click.prevent="emit('select', { key: it.key, name: it.name, page: it.page, route: it.route })"
           >
             <span class="ico"><img :src="it.icon" alt="" /></span>
             <span class="txt">

@@ -8,6 +8,7 @@ import ImageGenPlaceholder from './components/ImageGenPlaceholder.vue'
 import { useTypewriter } from './composables/useTypewriter'
 import { useGenerationJobs } from './composables/useGenerationJobs'
 import { useRouter } from 'vue-router'
+import { REQUIRE_LOGIN } from '@/config/runtime'
 import {
   appendChatMessages,
   batchDeleteChatSessions,
@@ -332,10 +333,15 @@ function showToast(name: string) {
   toastShow.value = true
 }
 
-function onNavSelect(payload: { key: string; name: string; page?: boolean }) {
+function onNavSelect(payload: { key: string; name: string; page?: boolean; route?: string }) {
   if (payload.page) {
     activeNavKey.value = payload.key
     siderOpen.value = false
+    // 已接入的独立页面：直接跳转路由
+    if (payload.route) {
+      router.push(payload.route)
+      return
+    }
     if (payload.key === 'chat') newChat()
     return
   }
@@ -844,7 +850,8 @@ function newChat() {
 function logout() {
   stopAll()
   auth.logout()
-  router.replace('/login')
+  // 免登录模式下没有登录页可回，直接回首页（守卫会静默重建会话）
+  router.replace(REQUIRE_LOGIN ? '/login' : '/')
 }
 
 function onDocClick() {

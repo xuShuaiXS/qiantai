@@ -21,6 +21,8 @@ export interface NavItem {
   tagCls?: string
   dot?: boolean
   page?: boolean
+  /** 独立页面路由：page 为 true 时点击跳转到该路由 */
+  route?: string
   active?: boolean
 }
 
@@ -148,11 +150,15 @@ export const navSections: NavSection[] = [
         name: "智能修图",
         key: "retouch",
         icon: "https://file.1foo.com/2024/09/24/15853987f4c3f595a7b1ada54fb3328e.svg",
+        page: true,
+        route: "/smart-editing",
       },
       {
         name: "图片生成",
         key: "imggen",
         icon: "https://file.1foo.com/2024/09/24/c25de71e8bf46d5b4c91ba24fc366efc.svg",
+        page: true,
+        route: "/image-generation",
       },
       {
         name: "股票分析",

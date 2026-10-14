@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import 'remixicon/fonts/remixicon.css'
 import 'virtual:uno.css'
 import './assets/css/main.css'
+import './assets/css/image-tools.css'
 
 // 手动 import 的 EP 反馈组件需要单独引入样式
 import 'element-plus/es/components/message/style/css'

@@ -1,0 +1,508 @@
+/**
+ * 「图片生成 / 智能修图」栏目样式基座
+ *
+ * 来源：oademo 项目的 styles/variables.css + styles/index.css（通用部分）
+ * 说明：只搬运 CSS 变量与通用类，剔除会污染宿主的全局 reset
+ *      （html/body/a/滚动条等，宿主 main.css 已有自己的一套）。
+ *      变量沿用 oademo 的 --c-* 命名空间，与宿主的 --app-* 互不冲突。
+ */
+
+/* ==================== 变量层 ==================== */
+:root {
+  /* 主色 */
+  --c-primary: #1677ff;
+  --c-primary-hover: #4096ff;
+  --c-primary-active: #0958d9;
+  --c-primary-light: #f0f6ff;
+  --c-primary-border: #b7d5ff;
+
+  /* 语义色 */
+  --c-success: #16a34a;
+  --c-success-light: #f0fdf4;
+  --c-warning: #d97706;
+  --c-warning-light: #fffbeb;
+  --c-danger: #dc2626;
+  --c-danger-light: #fef2f2;
+  --c-info: #0891b2;
+  --c-info-light: #ecfeff;
+
+  /* 文本 */
+  --c-text: #1f2937;
+  --c-text-regular: #4b5563;
+  --c-text-secondary: #6b7280;
+  --c-text-placeholder: #9ca3af;
+
+  /* 背景与边框 */
+  --c-bg: #f4f6fb;
+  --c-bg-card: #ffffff;
+  --c-bg-hover: #f5f8ff;
+  --c-border: #e8edf5;
+  --c-border-light: #f1f4f8;
+
+  /* 侧边栏（深色企业风） */
+  --c-sider-bg: #17233d;
+  --c-sider-bg-sub: #101a30;
+  --c-sider-text: #b7c3d7;
+  --c-sider-text-active: #ffffff;
+  --c-sider-hover: #23365d;
+  --c-sider-width: 216px;
+  --c-sider-width-collapsed: 64px;
+  --c-header-height: 56px;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 14px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(38, 64, 105, 0.05);
+  --shadow: 0 6px 18px rgba(38, 64, 105, 0.08);
+  --shadow-lg: 0 18px 44px rgba(38, 64, 105, 0.14);
+
+  /* 字体 */
+  --font-family: Inter, system-ui, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Helvetica,
+    Arial, "Hiragino Sans GB", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* 层级 */
+  --z-dropdown: 1000;
+  --z-drawer: 1100;
+  --z-modal: 1200;
+  --z-message: 1300;
+
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==================== 通用类层 ==================== */
+/* ============ 通用原子类 ============ */
+.u-flex {
+  display: flex;
+}
+
+.u-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.u-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.u-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.u-gap-4 {
+  gap: 4px;
+}
+.u-gap-8 {
+  gap: 8px;
+}
+.u-gap-12 {
+  gap: 12px;
+}
+.u-gap-16 {
+  gap: 16px;
+}
+.u-gap-20 {
+  gap: 20px;
+}
+
+.u-mt-8 {
+  margin-top: 8px;
+}
+.u-mt-12 {
+  margin-top: 12px;
+}
+.u-mt-16 {
+  margin-top: 16px;
+}
+.u-mt-20 {
+  margin-top: 20px;
+}
+
+.u-fill {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.u-text-secondary {
+  color: var(--c-text-secondary);
+}
+
+.u-text-danger {
+  color: var(--c-danger);
+}
+
+.u-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.u-nowrap {
+  white-space: nowrap;
+}
+
+/* 卡片 */
+.card {
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--c-border-light);
+}
+
+.card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.card__title::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--c-primary);
+}
+
+.card__body {
+  padding: 18px;
+}
+
+.card__body--flush {
+  padding: 0;
+}
+
+/* 页面容器 */
+.page {
+  padding: 16px 20px 28px;
+}
+
+.page__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.page__title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.page__desc {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--c-text-secondary);
+}
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 15px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--c-text-regular);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:hover {
+  color: var(--c-primary);
+  border-color: var(--c-primary-border);
+  background: var(--c-primary-light);
+}
+
+.btn:active {
+  transform: translateY(0.5px);
+}
+
+.btn--primary {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: var(--c-primary-hover);
+  border-color: var(--c-primary-hover);
+  color: #fff;
+}
+
+.btn--danger {
+  background: #fff;
+  border-color: #fca5a5;
+  color: var(--c-danger);
+}
+
+.btn--danger:hover {
+  background: var(--c-danger-light);
+  border-color: var(--c-danger);
+  color: var(--c-danger);
+}
+
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.btn--ghost:hover {
+  background: var(--c-bg-hover);
+}
+
+.btn--sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 表单 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: 13px;
+  color: var(--c-text-regular);
+}
+
+.field__label--required::after {
+  content: "*";
+  margin-left: 2px;
+  color: var(--c-danger);
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: #fff;
+  transition: var(--transition);
+}
+
+.textarea {
+  height: auto;
+  min-height: 84px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input--error {
+  border-color: var(--c-danger);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--c-text-placeholder);
+}
+
+.field__error {
+  font-size: 12px;
+  color: var(--c-danger);
+}
+
+/* 标签 */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--c-bg-hover);
+  color: var(--c-text-regular);
+}
+
+.tag--primary {
+  background: var(--c-primary-light);
+  color: var(--c-primary);
+}
+.tag--success {
+  background: var(--c-success-light);
+  color: var(--c-success);
+}
+.tag--warning {
+  background: var(--c-warning-light);
+  color: var(--c-warning);
+}
+.tag--danger {
+  background: var(--c-danger-light);
+  color: var(--c-danger);
+}
+.tag--info {
+  background: var(--c-info-light);
+  color: var(--c-info);
+}
+
+/* 表格 */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  padding: 11px 14px;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text-secondary);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-border-light);
+  color: var(--c-text-regular);
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  transition: background 0.15s;
+}
+
+.table tbody tr:hover {
+  background: #fafbff;
+}
+
+/* 骨架屏 */
+.skeleton {
+  background: linear-gradient(90deg, #eef0f3 25%, #f6f7f9 37%, #eef0f3 63%);
+  background-size: 400% 100%;
+  border-radius: var(--radius-sm);
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* 淡入 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 路由切换 */
+.route-fade-enter-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.route-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* ============================================================
+ * 以下为「移植适配层」——原项目 oademo 中的页面位于带侧边栏 + 顶部导航的
+ * BasicLayout 内，而极光AI 的这两个栏目是独立路由、无外层布局。
+ * 这里集中记录两处必要的补偿，便于日后排查。
+ * ============================================================ */
+
+/* 1) 宿主 main.css 设置了 body { overflow: hidden }（对话页自管滚动）。
+ *    移植过来的栏目页内容较长，需要页面级滚动，这里为其开放滚动能力。 */
+.image-page,
+.smart-editing-page,
+.editing-page {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* 2) 返回对话页的浮动入口（宿主通过侧边栏进入，栏目页内需要一个回程入口） */
+.gt-back-home {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--c-text-regular);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+}
+
+.gt-back-home:hover {
+  border-color: var(--c-primary-border);
+  background: var(--c-primary-light);
+  color: var(--c-primary);
+}
+
+@media (max-width: 720px) {
+  .gt-back-home {
+    bottom: 10px;
+    left: 10px;
+  }
+}

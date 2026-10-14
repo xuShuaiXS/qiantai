@@ -7,7 +7,8 @@ export function resolveMediaUrl(url: string): string {
   const u = (url || '').trim()
   if (!u) return u
   const m = u.match(/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/uploads\/.+)$/i)
-  if (m) return m[1]
+  // noUncheckedIndexedAccess 下捕获组 m[1] 为 string | undefined，回退原地址
+  if (m) return m[1] ?? u
   return u
 }
 

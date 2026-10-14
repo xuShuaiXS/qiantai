@@ -1,5 +1,6 @@
 import { clearToken, getToken } from './auth'
 import { resolveMediaUrl, resolveMediaUrls } from '@/utils/mediaUrl'
+import { REQUIRE_LOGIN } from '@/config/runtime'
 
 export type ChatContentPart =
   | { type: 'text'; text: string }
@@ -58,7 +59,8 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
 async function handleUnauthorized(body: { code?: number; message?: string }) {
   if (body?.code === 40100 || body?.code === 40102 || body?.code === 40103) {
     clearToken()
-    if (!location.pathname.startsWith('/login')) {
+    // 免登录模式下不跳登录页：由路由守卫静默重建会话
+    if (REQUIRE_LOGIN && !location.pathname.startsWith('/login')) {
       location.href = `/login?redirect=${encodeURIComponent(location.pathname)}`
     }
   }
@@ -216,8 +218,11 @@ export async function streamChat(opts: {
 
   if (res.status === 401) {
     clearToken()
-    location.href = `/login?redirect=${encodeURIComponent(location.pathname)}`
-    throw new Error('登录已失效，请重新登录')
+    if (REQUIRE_LOGIN) {
+      location.href = `/login?redirect=${encodeURIComponent(location.pathname)}`
+      throw new Error('登录已失效，请重新登录')
+    }
+    throw new Error('请求未授权')
   }
 
   if (!res.ok) {
