@@ -146,6 +146,8 @@ export const navSections: NavSection[] = [
         name: "超级智能体",
         key: "agent",
         icon: "https://file.1foo.com/2025/12/29/aa2ca925a9cac7f61d5c25c282494a12.png",
+        page: true,
+        route: "/agents",
       },
       {
         name: "智能修图",

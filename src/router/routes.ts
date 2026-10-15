@@ -68,6 +68,32 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+
+  /*
+   * 「超级智能体」栏目：市场页 + 智能体对话页，同样挂在 ToolsShell 下。
+   * 市场数据走 src/api/agents.ts 双模式：默认前端 Mock（内置种子数据 + localStorage），
+   * 配置 VITE_AGENTS_API=/agent-api 后切换到本地 Nest 后端（vite 代理转发）。
+   * 智能体对话不走新后端，直接复用 8080 的 /chat/completions 流式接口。
+   */
+  {
+    path: '/agents',
+    component: () => import('@/views/tools/ToolsShell.vue'),
+    meta: { public: true, shell: 'tools' },
+    children: [
+      {
+        path: '',
+        name: 'Agents',
+        component: () => import('@/views/agents/AgentsView.vue'),
+        meta: { title: '超级智能体 - 极光AI', public: true },
+      },
+      {
+        path: ':id/chat',
+        name: 'AgentChat',
+        component: () => import('@/views/agents/AgentChatView.vue'),
+        meta: { title: '智能体对话 - 极光AI', public: true },
+      },
+    ],
+  },
 ]
 
 export default routes

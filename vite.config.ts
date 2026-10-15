@@ -41,6 +41,13 @@ export default defineConfig({
         target: 'http://192.168.50.30:8080',
         changeOrigin: true,
       },
+      // 超级智能体本地后端（agent-server, NestJS, 端口 3000，全局前缀 /api）
+      // 前端 .env.development 配 VITE_AGENTS_API=/agent-api 即启用；为空则走前端 Mock
+      '/agent-api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/agent-api/, '/api'),
+      },
     },
   },
 })
