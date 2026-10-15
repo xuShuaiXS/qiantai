@@ -35,6 +35,11 @@ function openCreate() {
   createVisible.value = true
 }
 
+/** 创建/保存成功后自动切到「我创建的」，让结果立即可见 */
+function onSaved() {
+  store.setTab('mine')
+}
+
 function openAgent(agent: AgentItem) {
   router.push(`/agents/${agent.id}/chat`)
 }
@@ -178,6 +183,6 @@ async function toggleFav(agent: AgentItem) {
       </main>
     </div>
 
-    <AgentCreateDialog v-model:visible="createVisible" :edit-agent="editTarget" />
+    <AgentCreateDialog v-model:visible="createVisible" :edit-agent="editTarget" @saved="onSaved" />
   </div>
 </template>

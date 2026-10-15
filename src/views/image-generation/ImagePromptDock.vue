@@ -26,9 +26,38 @@ const advancedVisible = ref(false)
 const placeholder = computed(() => props.selectedEffect?.hint || '描述你的创意灵感，极光AI 会将文字变成画面…')
 const canGenerate = computed(() => props.form.prompt.trim().length >= 4 && !props.submitting)
 const modelOptions = computed(() => {
-  if (imageStore.models.length) return imageStore.models
-  return [{ value: '', label: imageStore.modelsLoading ? '模型加载中…' : '无可用模型', desc: imageStore.modelsError }]
+  if (imageStore.models.length) {
+    // 健康的模型在前，label 带状态标记便于区分
+    return imageStore.models.map((m) => ({
+      ...m,
+      label:
+        m.health === 'healthy'
+          ? `${m.label} ✓`
+          : m.health === 'degraded'
+            ? `${m.label}（不稳定）`
+            : m.label,
+    }))
+  }
+  return [
+    {
+      value: '',
+      label: imageStore.modelsLoading
+        ? '模型加载中…'
+        : imageStore.modelsError
+          ? '模型加载失败，请重试'
+          : '无可用模型',
+      desc: imageStore.modelsError || '后端未配置图片能力模型',
+      health: 'unknown',
+    },
+  ]
 })
+
+/** 模型列表为空时点击模型选择器 = 重新加载（后端恢复后无需整页刷新） */
+function onModelSelectClick() {
+  if (!imageStore.models.length && !imageStore.modelsLoading) {
+    imageStore.fetchModels()
+  }
+}
 /**
  * 左侧让位：外层 ToolsShell 会把侧栏宽度写入全局变量 --tools-sider-w，
  * .dock-layer 用它做 fixed 定位的 left 偏移（移动端媒体查询里归零）。
@@ -61,7 +90,9 @@ function showExample() {
 
         <div class="prompt-dock__toolbar">
           <div class="prompt-dock__options">
-            <BaseSelect v-model="form.model" :options="modelOptions" label="模型" icon="🏆" drop="up" />
+            <div @click="onModelSelectClick">
+              <BaseSelect v-model="form.model" :options="modelOptions" label="模型" icon="🏆" drop="up" />
+            </div>
             <BaseSelect v-model="form.count" :options="countOptions" label="数量" icon="🖼" drop="up" />
             <BaseSelect v-model="form.size" :options="sizeOptions" label="比例" icon="▢" drop="up" />
             <button class="dock-btn" :class="{ 'is-open': advancedVisible }" type="button" @click="advancedVisible = !advancedVisible">

@@ -24,6 +24,15 @@ export interface ImageModelOption {
   value: string
   label: string
   desc: string
+  /** 后端健康标记：healthy / degraded / unknown */
+  health?: string
+}
+
+/** 健康度排序权重：越小越靠前 */
+function rankHealth(health?: string): number {
+  if (health === 'healthy') return 0
+  if (health === 'unknown') return 1
+  return 2 // degraded 或其他
 }
 
 /** 单张生成结果 */
@@ -82,11 +91,18 @@ export async function fetchImageModels(): Promise<ImageModelOption[]> {
         value: variant.modelId,
         label: variant.name,
         desc: `${family.name} · ${family.providerName}`,
+        health: (variant as { health?: string }).health || 'unknown',
       })
     })
   })
 
-  return options
+  // 健康的排前面，同型号去重（保留健康状态最好的那条）
+  const byModel = new Map<string, ImageModelOption>()
+  for (const opt of options) {
+    const prev = byModel.get(opt.value)
+    if (!prev || rankHealth(opt.health) < rankHealth(prev.health)) byModel.set(opt.value, opt)
+  }
+  return [...byModel.values()].sort((a, b) => rankHealth(a.health) - rankHealth(b.health))
 }
 
 /* ------------------------------ 生图 ------------------------------ */

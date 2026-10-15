@@ -91,6 +91,8 @@ async function apiJSON<T>(path: string, init?: RequestInit): Promise<T> {
       'X-User': currentUsername(),
       ...(init?.headers || {}),
     },
+    // 后端不可达时 15s 快速失败，避免界面无响应
+    signal: AbortSignal.timeout(15000),
   })
   const body = await res.json()
   if (body.code !== 0) throw new Error(body.message || `请求失败 ${res.status}`)

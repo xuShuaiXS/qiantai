@@ -52,7 +52,7 @@ watch(
     form.categoryId = a?.categoryId ?? null
     form.description = a?.description ?? ''
     form.tags = a ? [...a.tags] : []
-    form.systemPrompt = a?.systemPrompt ?? ''
+    form.systemPrompt = a?.systemPrompt ?? '你是一个乐于助人的AI助手。请根据用户的问题给出专业、简洁、友好的回答。'
     form.modelId = a?.modelId ?? ''
     form.knowledgeBase = false
     tagInput.value = ''

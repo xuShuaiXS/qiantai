@@ -4,7 +4,9 @@
  * 页面结构：hero 区（标题+两张入口卡）→ tab/搜索区 → 左分类栏 + 右卡片网格
  * ============================================================ */
 
-.agent-page {
+/* 变量对市场页与对话页同时生效（两页是 ToolsShell 下的兄弟路由，互不嵌套） */
+.agent-page,
+.agent-chat {
   --agent-bg: #f5f7fb;
   --agent-card-bg: #ffffff;
   --agent-border: #e8ecf3;
@@ -14,7 +16,9 @@
   --agent-primary: #5b6cff;
   --agent-primary-weak: #eef0ff;
   --agent-star: #ffb02e;
+}
 
+.agent-page {
   min-height: 100%;
   padding: 0 0 40px;
   background: var(--agent-bg);

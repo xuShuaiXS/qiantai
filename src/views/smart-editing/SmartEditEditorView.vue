@@ -139,6 +139,9 @@ async function send() {
     pushHistory(task.images[0].url)
     instruction.value = ''
     message.success('已生成修图结果')
+  } catch (err) {
+    // 此前缺少 catch：接口异常时静默失败，表现为"点击后没反应"
+    message.error(err instanceof Error ? err.message : '生成失败，请稍后重试')
   } finally {
     sending.value = false
   }
@@ -184,6 +187,7 @@ onMounted(loadModels)
               </span>
               <strong>{{ uploading ? '正在上传…' : '选择图片' }}</strong>
               <small>支持 JPG / PNG / WEBP，上传后在右侧输入修图指令</small>
+              <small style="display:block; margin-top:6px; color:#8b93a8;">当前后端暂不支持基于原图修改，生成将按文字描述重新绘制画面</small>
             </button>
           </template>
         </div>
@@ -245,7 +249,7 @@ onMounted(loadModels)
           class="side-input__field"
           rows="2"
           maxlength="500"
-          placeholder="输入您想要的修改效果（⬆ 选择图片 / 修图指令）"
+          placeholder="描述想要的画面效果，将按文字重新生成"
           @keydown.enter.exact.prevent="send"
         />
         <div class="side-input__bar">

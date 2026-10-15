@@ -94,6 +94,19 @@ async function generate() {
       </article>
     </section>
 
+    <!-- 模型加载失败提示条：后端未启动/宕机时给出明确原因和重试入口 -->
+    <div v-if="store.modelsError && !store.models.length" class="ig-model-alert">
+      <span class="ig-model-alert__text">⚠️ {{ store.modelsError }}</span>
+      <button
+        class="ig-model-alert__retry"
+        type="button"
+        :disabled="store.modelsLoading"
+        @click="store.fetchModels()"
+      >
+        {{ store.modelsLoading ? '加载中…' : '重新加载' }}
+      </button>
+    </div>
+
     <!-- 生成结果：真实接口返回的图片 / 生成状态 -->
     <section v-if="store.hasResults" class="ig-results">
       <header class="ig-results__head">
@@ -141,6 +154,34 @@ async function generate() {
 <style scoped>
 /* 底部预留：固定输入栏高度 + 间距，避免最后一行卡片被遮挡 */
 .image-page { max-width: 1160px; margin: 0 auto; padding-bottom: 210px; }
+
+/* ---------------- 模型加载失败提示条 ---------------- */
+.ig-model-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border: 1px solid #ffd8a8;
+  border-radius: var(--radius-lg, 12px);
+  background: #fff7ec;
+  color: #8a5a00;
+  font-size: 13px;
+}
+.ig-model-alert__retry {
+  flex: 0 0 auto;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 999px;
+  background: #ff9800;
+  color: #fff;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: filter .2s ease;
+}
+.ig-model-alert__retry:hover:not(:disabled) { filter: brightness(1.08); }
+.ig-model-alert__retry:disabled { opacity: .6; cursor: not-allowed; }
 
 /* ---------------- 生成结果区 ---------------- */
 .ig-results { margin-top: 26px; }
