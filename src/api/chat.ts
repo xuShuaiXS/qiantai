@@ -56,11 +56,17 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
   return headers
 }
 
+/** 公开工具页：401 时不踢去登录页（页面可匿名浏览，失败由页面自行提示） */
+const PUBLIC_TOOL_PREFIXES = ['/image-generation', '/smart-editing', '/ai-draw', '/agents']
+
 async function handleUnauthorized(body: { code?: number; message?: string }) {
   if (body?.code === 40100 || body?.code === 40102 || body?.code === 40103) {
     clearToken()
     // 免登录模式下不跳登录页：由路由守卫静默重建会话
-    if (REQUIRE_LOGIN && !location.pathname.startsWith('/login')) {
+    if (!REQUIRE_LOGIN) return
+    // 公开工具页不跳登录：模型列表等加载失败由页面内提示，不打断浏览
+    if (PUBLIC_TOOL_PREFIXES.some((p) => location.pathname.startsWith(p))) return
+    if (!location.pathname.startsWith('/login')) {
       location.href = `/login?redirect=${encodeURIComponent(location.pathname)}`
     }
   }

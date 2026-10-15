@@ -1,0 +1,602 @@
+/* ============================================================
+ * AI绘画（/ai-draw）样式
+ * 命名空间：--draw-* / .draw-*，绿色主题与超级智能体市场页一致
+ * ============================================================ */
+
+.draw-page {
+  --draw-primary: #0dbf6c;
+  --draw-primary-deep: #06a45a;
+  --draw-primary-weak: #e6f8ee;
+  --draw-bg: #f6faf8;
+  --draw-card-bg: #ffffff;
+  --draw-border: #e6efe9;
+  --draw-text: #17242c;
+  --draw-text-2: #5c6b64;
+  --draw-text-3: #93a29a;
+
+  min-height: 100%;
+  padding: 0 0 56px;
+  background: linear-gradient(180deg, #e9f9f0 0%, #f4faf6 320px, #f6faf8 100%);
+  color: var(--draw-text);
+  box-sizing: border-box;
+}
+
+/* ------------------------------ Hero ------------------------------ */
+
+.draw-hero {
+  text-align: center;
+  padding: 34px 24px 0;
+}
+
+.draw-hero__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.draw-hero__sub {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  color: var(--draw-text-3);
+}
+
+/* ------------------------------ 创作输入卡 ------------------------------ */
+
+.draw-composer {
+  max-width: 720px;
+  margin: 22px auto 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--draw-card-bg);
+  border: 1px solid var(--draw-border);
+  box-shadow: 0 8px 28px rgba(13, 100, 60, 0.08);
+  box-sizing: border-box;
+}
+
+.draw-composer__main {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* 上传块（参考图能力即将上线，点击提示） */
+.draw-upload {
+  flex: 0 0 86px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed #bfe6d2;
+  border-radius: 10px;
+  background: #f4fbf7;
+  color: var(--draw-primary-deep);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.draw-upload:hover {
+  border-color: var(--draw-primary);
+  background: var(--draw-primary-weak);
+}
+
+.draw-upload__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--draw-primary-weak);
+}
+
+.draw-upload__label {
+  font-size: 12px;
+}
+
+.draw-composer__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 86px;
+  resize: none;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  color: var(--draw-text);
+  background: none;
+}
+
+.draw-composer__input::placeholder { color: var(--draw-text-3); }
+
+.draw-composer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--draw-border);
+  flex-wrap: wrap;
+}
+
+.draw-composer__opts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.draw-media-tabs {
+  display: flex;
+  background: #eef4f0;
+  border-radius: 9px;
+  padding: 3px;
+}
+
+.draw-media-tab {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  border-radius: 7px;
+  color: var(--draw-text-2);
+  transition: all 0.15s ease;
+}
+
+.draw-media-tab.is-active {
+  background: #fff;
+  color: var(--draw-text);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(13, 100, 60, 0.12);
+}
+
+.draw-media-tab:not(.is-active):hover { color: var(--draw-primary-deep); }
+
+.draw-composer__go {
+  flex: 0 0 auto;
+  border: none;
+  cursor: pointer;
+  height: 38px;
+  padding: 0 22px;
+  border-radius: 10px;
+  background: var(--draw-text);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.draw-composer__go:hover:not(:disabled) { background: #000; }
+.draw-composer__go:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ------------------------------ 模型说明 + 模式胶囊 ------------------------------ */
+
+.draw-note {
+  max-width: 720px;
+  margin: 12px auto 0;
+  text-align: center;
+}
+
+.draw-note__model {
+  margin: 0;
+  font-size: 12px;
+  color: var(--draw-text-3);
+}
+
+.draw-note__retry {
+  border: none;
+  background: none;
+  color: var(--draw-primary-deep);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.draw-modes {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.draw-mode {
+  border: 1px solid var(--draw-border);
+  background: var(--draw-card-bg);
+  cursor: pointer;
+  padding: 6px 18px;
+  font-size: 12.5px;
+  border-radius: 999px;
+  color: var(--draw-text-2);
+  transition: all 0.15s ease;
+}
+
+.draw-mode:hover { color: var(--draw-primary-deep); border-color: var(--draw-primary); }
+
+.draw-mode.is-active {
+  border-color: var(--draw-primary);
+  background: var(--draw-primary-weak);
+  color: var(--draw-primary-deep);
+  font-weight: 600;
+}
+
+/* ------------------------------ 生成结果 ------------------------------ */
+
+.draw-results {
+  max-width: 720px;
+  margin: 20px auto 0;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.draw-result {
+  border: 1px solid var(--draw-border);
+  border-radius: 14px;
+  background: var(--draw-card-bg);
+  overflow: hidden;
+}
+
+.draw-result__body {
+  min-height: 160px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px;
+  padding: 6px;
+  place-items: center;
+}
+
+.draw-result__state {
+  padding: 50px 0;
+  font-size: 13px;
+  color: var(--draw-text-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draw-result__state--error {
+  flex-direction: column;
+  gap: 6px;
+  color: #e05a5a;
+}
+.draw-result__state--error strong { font-size: 14px; }
+.draw-result__state--error span { font-size: 12px; color: #e89393; }
+
+.draw-result__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--draw-primary-weak);
+  border-top-color: var(--draw-primary);
+  border-radius: 50%;
+  animation: draw-spin 0.8s linear infinite;
+}
+
+@keyframes draw-spin { to { transform: rotate(360deg); } }
+
+.draw-result__imgs {
+  display: contents;
+}
+
+.draw-result__img {
+  display: block;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--draw-primary-weak);
+}
+
+.draw-result__img img {
+  width: 100%;
+  height: 100%;
+  max-height: 340px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s ease;
+}
+
+.draw-result__img:hover img { transform: scale(1.03); }
+
+.draw-result__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--draw-border);
+}
+
+.draw-result__prompt {
+  font-size: 12.5px;
+  color: var(--draw-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.draw-result__meta small { font-size: 11px; color: var(--draw-text-3); }
+
+/* ------------------------------ 通用区块 ------------------------------ */
+
+.draw-section {
+  max-width: 1080px;
+  margin: 34px auto 0;
+  padding: 0 24px;
+}
+
+.draw-section__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.draw-section__sub {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--draw-text-3);
+}
+
+.draw-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.draw-section__link {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--draw-primary-deep);
+  padding: 0;
+}
+
+.draw-section__link:hover { text-decoration: underline; }
+
+/* ------------------------------ 选择创作类型 ------------------------------ */
+
+.draw-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.draw-type-card {
+  background: var(--draw-card-bg);
+  border: 1px solid var(--draw-border);
+  border-radius: 14px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.draw-type-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(13, 100, 60, 0.12);
+  border-color: rgba(13, 191, 108, 0.45);
+}
+
+.draw-type-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+.draw-type-card__icon--blue { background: #e8f1ff; }
+.draw-type-card__icon--green { background: var(--draw-primary-weak); }
+.draw-type-card__icon--orange { background: #fff4e0; }
+
+.draw-type-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draw-type-card__soon {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: #f08c00;
+  background: #fff4e0;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.draw-type-card p {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--draw-text-2);
+}
+
+.draw-type-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.draw-type-card__tags span {
+  font-size: 11px;
+  color: var(--draw-text-2);
+  background: #f1f6f3;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+/* ------------------------------ 电商与宣传 ------------------------------ */
+
+.draw-ecom {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.draw-ecom-card {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  background: var(--draw-card-bg);
+  border: 1px solid var(--draw-border);
+  border-radius: 14px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.draw-ecom-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(13, 100, 60, 0.12);
+  border-color: rgba(13, 191, 108, 0.45);
+}
+
+.draw-ecom-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.draw-ecom-card__icon { font-size: 20px; }
+
+.draw-ecom-card h3 {
+  margin: 8px 0 6px;
+  font-size: 15px;
+}
+
+.draw-ecom-card p {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--draw-text-2);
+}
+
+.draw-ecom-card__btn {
+  border: none;
+  cursor: not-allowed;
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #eef1ee;
+  color: var(--draw-text-3);
+}
+
+.draw-ecom-card__btn--primary {
+  background: var(--draw-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.draw-ecom-card__btn--primary:hover { background: var(--draw-primary-deep); }
+
+/* 缩略占位块 */
+.draw-ecom-card__thumb {
+  flex: 0 0 132px;
+  min-height: 118px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #eaf9f1 0%, #d9f4e6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+}
+
+.draw-ecom-card__thumb--video {
+  background: linear-gradient(160deg, #1f2b23 0%, #2e4034 100%);
+  color: #fff;
+  font-size: 24px;
+}
+
+/* ------------------------------ 图片创作小工具 ------------------------------ */
+
+.draw-core-tag {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--draw-primary-deep);
+  background: var(--draw-primary-weak);
+  position: relative;
+}
+
+.draw-core-tag::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--draw-primary);
+}
+
+.draw-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.draw-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 10px;
+  background: var(--draw-card-bg);
+  border: 1px solid var(--draw-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.draw-tool:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(13, 100, 60, 0.12);
+  border-color: rgba(13, 191, 108, 0.45);
+}
+
+.draw-tool__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--draw-primary-weak);
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.draw-tool strong { font-size: 13.5px; color: var(--draw-text); }
+.draw-tool small { font-size: 11px; color: var(--draw-text-3); }
+
+/* ------------------------------ 响应式 ------------------------------ */
+
+@media (max-width: 720px) {
+  .draw-composer__main { flex-direction: column; }
+  .draw-upload { flex-direction: row; padding: 10px; }
+  .draw-composer__bar { flex-direction: column; align-items: stretch; }
+  .draw-composer__go { width: 100%; }
+  .draw-ecom-card { flex-direction: column; }
+  .draw-ecom-card__thumb { flex: none; width: 100%; }
+}

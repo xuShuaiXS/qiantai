@@ -141,6 +141,7 @@ export const navSections: NavSection[] = [
         tag: "1000+功能",
         tagCls: "tag-num",
         page: true,
+        route: "/ai-draw",
       },
       {
         name: "超级智能体",

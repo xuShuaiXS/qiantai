@@ -70,6 +70,24 @@ const routes: RouteRecordRaw[] = [
   },
 
   /*
+   * 「AI绘画」栏目：描述想法生成图片（复用 /chat/images/generations 文生图链路）。
+   * 视频相关板块与未开发能力仅做前端占位，点击提示"未开发/即将上线"。
+   */
+  {
+    path: '/ai-draw',
+    component: () => import('@/views/tools/ToolsShell.vue'),
+    meta: { public: true, shell: 'tools' },
+    children: [
+      {
+        path: '',
+        name: 'AiDraw',
+        component: () => import('@/views/ai-draw/AiDrawView.vue'),
+        meta: { title: 'AI绘画 - 极光AI', public: true },
+      },
+    ],
+  },
+
+  /*
    * 「超级智能体」栏目：市场页 + 智能体对话页，同样挂在 ToolsShell 下。
    * 市场数据走 src/api/agents.ts 双模式：默认前端 Mock（内置种子数据 + localStorage），
    * 配置 VITE_AGENTS_API=/agent-api 后切换到本地 Nest 后端（vite 代理转发）。
