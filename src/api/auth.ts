@@ -25,6 +25,9 @@ export interface AuthResult {
   user: UserProfile
 }
 
+/** 认证请求统一 15s 超时：后端不可达时快速失败，避免按钮无限转圈 */
+const AUTH_TIMEOUT = 15000
+
 async function parseAuthBody(res: Response, fallback: string): Promise<AuthResult> {
   const body = await res.json()
   if (body.code !== 0) throw new Error(body.message || fallback)
@@ -36,6 +39,7 @@ export async function loginApi(username: string, password: string): Promise<Auth
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
+    signal: AbortSignal.timeout(AUTH_TIMEOUT),
   })
   return parseAuthBody(res, '登录失败')
 }
@@ -49,6 +53,7 @@ export async function registerApi(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, nickname: nickname || '' }),
+    signal: AbortSignal.timeout(AUTH_TIMEOUT),
   })
   return parseAuthBody(res, '注册失败')
 }
@@ -56,6 +61,7 @@ export async function registerApi(
 export async function meApi(): Promise<UserProfile> {
   const res = await fetch(`${baseURL}/auth/me`, {
     headers: { Authorization: `Bearer ${getToken()}` },
+    signal: AbortSignal.timeout(AUTH_TIMEOUT),
   })
   const body = await res.json()
   if (body.code !== 0) throw new Error(body.message || '未登录')

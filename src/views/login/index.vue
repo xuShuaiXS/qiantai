@@ -34,10 +34,21 @@ async function submit() {
     const redirect = (route.query.redirect as string) || '/'
     await router.replace(redirect)
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : mode.value === 'register' ? '注册失败' : '登录失败')
+    ElMessage.error(friendlyAuthError(e, mode.value === 'register' ? '注册失败' : '登录失败'))
   } finally {
     loading.value = false
   }
+}
+
+/** 把网络层错误翻译成可读提示 */
+function friendlyAuthError(e: unknown, fallback: string): string {
+  if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+    return '连接服务器超时，请确认后端服务是否在运行'
+  }
+  if (e instanceof TypeError) {
+    return '无法连接服务器，请检查网络或后端服务状态'
+  }
+  return e instanceof Error ? e.message : fallback
 }
 
 function switchMode(next: 'login' | 'register') {
