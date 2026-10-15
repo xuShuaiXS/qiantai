@@ -84,5 +84,13 @@ function onNavSelect(payload: { key: string; name: string; page?: boolean; route
   min-width: 0;
   position: relative;
   overflow-y: auto;
+  /* 内容区仍可滚动，但隐藏滚动条（避免右侧出现物理滚动条） */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 旧 Edge/IE */
+}
+.tools-main::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chrome / Edge / Safari */
 }
 </style>

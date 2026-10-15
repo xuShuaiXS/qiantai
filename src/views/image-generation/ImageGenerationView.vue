@@ -5,7 +5,7 @@
  * 布局：Hero 区 → 效果分类筛选 → 效果卡片网格 → 底部固定输入栏（ImagePromptDock，Teleport 到 body）。
  * 说明：页面底部预留 padding-bottom，避免内容被固定输入栏遮挡。
  */
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useImageGenerationStore, IMAGE_EFFECTS, IMAGE_EFFECT_CATEGORIES } from '@/stores/imageGeneration'
 import { useMessage } from '@/composables/useMessage'
 import SvgIcon from '@/components/SvgIcon.vue'
@@ -22,7 +22,8 @@ const featurePills = [
   { icon: '⚡', label: '快速生成' },
 ]
 
-onBeforeUnmount(() => store.stopPolling())
+// 模型列表来自后端配置（/chat/model-families 中 capability=image 的型号）
+onMounted(() => store.fetchModels())
 
 /** 效果单选：再次点击取消，选中其它效果时自动替换，并在输入栏同步提示 */
 function toggleEffect(effect) {
@@ -34,8 +35,17 @@ function toggleEffect(effect) {
 function clearEffect() {
   store.form.effect = ''
 }
+
+/** 提交生成：真实调用后端生图接口，失败时展示后端返回的原因 */
 async function generate() {
-  try { await store.createTask(); message.success('图片生成任务已创建，正在为你创作') } catch (error) { message.error(error.message || '创建任务失败') }
+  if (!store.form.model) {
+    message.warning('暂无可用图片模型，请先在控制台配置厂商与模型')
+    return
+  }
+  const task = await store.createTask()
+  if (!task) return
+  if (task.status === 'failed') message.error(task.errorMessage || '生成失败，请稍后重试')
+  else message.success(`已生成 ${task.images.length} 张图片`)
 }
 </script>
 
@@ -84,6 +94,45 @@ async function generate() {
       </article>
     </section>
 
+    <!-- 生成结果：真实接口返回的图片 / 生成状态 -->
+    <section v-if="store.hasResults" class="ig-results">
+      <header class="ig-results__head">
+        <h2 class="ig-results__title"><SvgIcon name="image-generation" :size="16" />生成结果</h2>
+        <button class="ig-results__clear" type="button" @click="store.clearResults()">清空记录</button>
+      </header>
+
+      <div class="ig-results__grid">
+        <article v-for="task in store.results" :key="task.id" class="ig-result">
+          <div class="ig-result__body" :class="`is-${task.status}`">
+            <div v-if="task.status === 'generating'" class="ig-result__state">
+              <span class="ig-result__spinner" />正在生成，请稍候…
+            </div>
+            <div v-else-if="task.status === 'failed'" class="ig-result__state ig-result__state--error">
+              <strong>生成失败</strong>
+              <p>{{ task.errorMessage }}</p>
+            </div>
+            <template v-else>
+              <a
+                v-for="img in task.images"
+                :key="img.index"
+                class="ig-result__img"
+                :href="img.url"
+                target="_blank"
+                rel="noopener"
+                :title="'点击查看原图'"
+              >
+                <img :src="img.url" :alt="task.prompt" loading="lazy" />
+              </a>
+            </template>
+          </div>
+          <footer class="ig-result__meta">
+            <span class="ig-result__prompt" :title="task.prompt">{{ task.prompt }}</span>
+            <small>{{ task.model }} · {{ task.size }}<template v-if="task.createdAt"> · {{ task.createdAt }}</template></small>
+          </footer>
+        </article>
+      </div>
+    </section>
+
     <!-- 底部固定输入栏（默认 teleport 到 body） -->
     <ImagePromptDock :form="store.form" :submitting="store.submitting" :selected-effect="selectedEffect" @generate="generate" @clear-effect="clearEffect" />
   </div>
@@ -92,6 +141,34 @@ async function generate() {
 <style scoped>
 /* 底部预留：固定输入栏高度 + 间距，避免最后一行卡片被遮挡 */
 .image-page { max-width: 1160px; margin: 0 auto; padding-bottom: 210px; }
+
+/* ---------------- 生成结果区 ---------------- */
+.ig-results { margin-top: 26px; }
+.ig-results__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.ig-results__title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--c-text); }
+.ig-results__clear { padding: 5px 12px; border: 1px solid var(--c-border); border-radius: var(--radius); background: #fff; color: var(--c-text-secondary); font-size: 12px; cursor: pointer; transition: var(--transition); }
+.ig-results__clear:hover { border-color: var(--c-primary-border); color: var(--c-primary); background: var(--c-primary-light); }
+.ig-results__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+
+.ig-result { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--c-border); border-radius: var(--radius-lg); background: var(--c-bg-card); box-shadow: var(--shadow-sm); }
+.ig-result__body { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; padding: 6px; min-height: 180px; }
+.ig-result__img { display: block; overflow: hidden; border-radius: var(--radius); background: var(--c-bg-hover); }
+.ig-result__img img { width: 100%; height: 100%; max-height: 360px; object-fit: cover; display: block; transition: transform .25s ease; }
+.ig-result__img:hover img { transform: scale(1.03); }
+
+.ig-result__state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 180px; padding: 20px; color: var(--c-text-secondary); font-size: 13px; text-align: center; }
+.ig-result__state--error { color: var(--c-danger); background: var(--c-danger-light); border-radius: var(--radius); }
+.ig-result__state--error p { margin-top: 4px; font-size: 12px; line-height: 1.6; word-break: break-all; }
+.ig-result__spinner { width: 18px; height: 18px; border: 2px solid var(--c-primary-border); border-top-color: var(--c-primary); border-radius: 50%; animation: ig-spin .8s linear infinite; }
+@keyframes ig-spin { to { transform: rotate(360deg); } }
+
+.ig-result__meta { display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; border-top: 1px solid var(--c-border-light); }
+.ig-result__prompt { color: var(--c-text); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ig-result__meta small { color: var(--c-text-placeholder); font-size: 11px; }
+
+@media (max-width: 560px) {
+  .ig-results__grid { grid-template-columns: 1fr; }
+}
 
 /* Hero */
 .ig-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18px 0 4px; }

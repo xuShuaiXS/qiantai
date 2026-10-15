@@ -129,16 +129,22 @@ export const IMAGE_EFFECTS: ImageEffect[] = [
   },
 ]
 
-export const IMAGE_MODELS: ImageModelOption[] = [
-  { value: 'aurora-v1', label: 'Aurora 1.0', desc: '均衡创作模型' },
-  { value: 'aurora-pro', label: 'Aurora Pro', desc: '细节增强模型' },
-]
+/*
+ * 模型列表不再写死在本地：改为运行时从后端拉取「图片」能力的型号，
+ * 见 store 的 models / fetchModels()（数据源 /chat/model-families）。
+ */
 
+/**
+ * 图片尺寸选项：对应后端 /chat/images/generations 的 size 参数。
+ * 取值与「模型对话」页（views/chat/data.ts 的 IMAGE_SIZE_OPTIONS）保持一致，
+ * 即已在对话生图链路上实测可用的那一组；具体可用范围仍由上游模型决定，后端会校验。
+ */
 export const IMAGE_SIZES: ImageSizeOption[] = [
   { value: '1024x1024', label: '1:1', width: 1024, height: 1024 },
-  { value: '1280x832', label: '3:2', width: 1280, height: 832 },
-  { value: '832x1280', label: '2:3', width: 832, height: 1280 },
-  { value: '1344x768', label: '16:9', width: 1344, height: 768 },
+  { value: '1792x1024', label: '16:9', width: 1792, height: 1024 },
+  { value: '1024x1792', label: '9:16', width: 1024, height: 1792 },
+  { value: '1536x1024', label: '3:2', width: 1536, height: 1024 },
+  { value: '1024x1536', label: '2:3', width: 1024, height: 1536 },
 ]
 
 /* ------------------------------ 表单 / 查询 ------------------------------ */
@@ -153,176 +159,134 @@ export interface ImageGenForm {
   count: number
 }
 
-export interface ImageGenQuery {
-  keyword: string
-  status: string
-  page: number
-  pageSize: number
-}
-
 function createForm(): ImageGenForm {
   return {
     prompt: '',
     negativePrompt: '低清晰度、文字、水印、变形、模糊',
     effect: '',
     style: 'cinematic',
-    model: 'aurora-v1',
+    // 由 fetchModels() 拉取后端图片模型后自动填充
+    model: '',
     size: '1024x1024',
-    count: 2,
+    count: 1,
   }
-}
-
-function createQuery(): ImageGenQuery {
-  return { keyword: '', status: 'all', page: 1, pageSize: 12 }
 }
 
 /* ------------------------------ Store ------------------------------ */
 
 export const useImageGenerationStore = defineStore('image-generation', () => {
   const form = reactive<ImageGenForm>(createForm())
-  const query = reactive<ImageGenQuery>(createQuery())
-  const list = ref<ImageTask[]>([])
-  const total = ref(0)
-  const loading = ref(false)
+  /** 结果记录：仅本次会话（后端未提供生图历史接口，前端内存态展示） */
+  const results = ref<ImageTask[]>([])
   const submitting = ref(false)
-  const error = ref<unknown>(null)
-  const detail = ref<ImageTask | null>(null)
-  const detailLoading = ref(false)
-  const detailError = ref<unknown>(null)
-  const pollingIds = new Set<string>()
-  const pollTimers = new Map<string, number>()
+  const error = ref<string>('')
 
-  const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)))
-  const generatingCount = computed(() =>
-    list.value.filter((item) => ['pending', 'generating'].includes(item.status)).length,
-  )
+  /* -------- 图片模型（来自后端配置，非本地写死） -------- */
+  const models = ref<ImageModelOption[]>([])
+  const modelsLoading = ref(false)
+  const modelsError = ref<string>('')
 
-  async function fetchList() {
-    loading.value = true
-    error.value = null
+  const hasResults = computed(() => results.value.length > 0)
+  const currentModel = computed(() => models.value.find((item) => item.value === form.model) || null)
+
+  /** 拉取后端配置的「图片」能力模型，并把默认型号写入表单 */
+  async function fetchModels() {
+    if (modelsLoading.value) return
+    modelsLoading.value = true
+    modelsError.value = ''
     try {
-      const result = await imageApi.fetchImageTaskList({ ...query })
-      list.value = result.list
-      total.value = result.total
-      result.list.filter((item) => ['pending', 'generating'].includes(item.status)).forEach(startPolling)
+      const options = await imageApi.fetchImageModels()
+      models.value = options
+      if (!options.length) {
+        modelsError.value = '后端未配置图片能力模型，请先在控制台配置厂商与模型'
+        return
+      }
+      if (!options.some((item) => item.value === form.model)) {
+        const first = options[0]
+        if (first) form.model = first.value
+      }
     } catch (err) {
-      error.value = err
-      list.value = []
-      total.value = 0
+      modelsError.value = err instanceof Error ? err.message : '模型列表加载失败'
     } finally {
-      loading.value = false
+      modelsLoading.value = false
     }
   }
 
-  async function fetchDetail(id: string) {
-    detailLoading.value = true
-    detailError.value = null
-    try {
-      detail.value = await imageApi.fetchImageTaskDetail(id)
-      return detail.value
-    } catch (err) {
-      detailError.value = err
-      throw err
-    } finally {
-      detailLoading.value = false
-    }
-  }
-
+  /**
+   * 提交一次生成任务（真实调用后端生图接口）。
+   * 返回结果记录；失败时记录内带有 errorMessage，页面据此提示。
+   */
   async function createTask() {
-    if (!form.prompt.trim() || submitting.value) return null
+    const prompt = form.prompt.trim()
+    if (!prompt || submitting.value) return null
+
+    const model = form.model || models.value[0]?.value || ''
+    if (!model) {
+      error.value = '请先选择模型'
+      return null
+    }
+
     const size = IMAGE_SIZES.find((item) => item.value === form.size)
+    const effect = IMAGE_EFFECTS.find((item) => item.value === form.effect)
+    // 效果预设作为提示词前置，保证「使用该效果」在正式环境下同样生效
+    const finalPrompt = effect ? `${prompt}（${effect.title}：${effect.hint}）` : prompt
+
+    error.value = ''
     submitting.value = true
+    const pending: ImageTask = {
+      id: `ig_${Date.now()}`,
+      prompt: finalPrompt,
+      negativePrompt: form.negativePrompt,
+      model,
+      size: form.size,
+      width: size?.width ?? 1024,
+      height: size?.height ?? 1024,
+      count: form.count,
+      status: 'generating',
+      images: [],
+      createdAt: '',
+      updatedAt: '',
+    }
+    results.value = [pending, ...results.value]
+
     try {
       const task = await imageApi.createImageTask({
-        ...form,
-        prompt: form.prompt.trim(),
+        prompt: finalPrompt,
+        negativePrompt: form.negativePrompt,
+        model,
+        size: form.size,
         width: size?.width ?? 1024,
         height: size?.height ?? 1024,
+        count: form.count,
       })
-      query.status = 'all'
-      query.page = 1
-      list.value = [task, ...list.value]
-      total.value += 1
-      startPolling(task)
+      const index = results.value.findIndex((item) => item.id === pending.id)
+      if (index > -1) results.value[index] = task
+      if (task.status === 'failed') error.value = task.errorMessage || '生图失败'
       return task
     } finally {
       submitting.value = false
     }
   }
 
-  async function retryTask(id: string) {
-    const task = await imageApi.retryImageTask(id)
-    const index = list.value.findIndex((item) => item.id === id)
-    if (index > -1) list.value[index] = task
-    if (detail.value?.id === id) detail.value = task
-    startPolling(task)
-    return task
+  /** 清空本次会话的生成记录 */
+  function clearResults() {
+    results.value = []
+    error.value = ''
   }
 
-  async function removeTask(id: string) {
-    await imageApi.removeImageTask(id)
-    stopPolling(id)
-    list.value = list.value.filter((item) => item.id !== id)
-    total.value = Math.max(0, total.value - 1)
-    if (detail.value?.id === id) detail.value = null
-  }
-
-  function updateTask(task: ImageTask) {
-    const index = list.value.findIndex((item) => item.id === task.id)
-    if (index > -1) list.value[index] = task
-    if (detail.value?.id === task.id) detail.value = task
-  }
-
-  function startPolling(task: ImageTask) {
-    if (!task.id || pollingIds.has(task.id)) return
-    pollingIds.add(task.id)
-    const poll = async () => {
-      try {
-        const latest = await imageApi.fetchImageTaskDetail(task.id)
-        updateTask(latest)
-        if (['pending', 'generating'].includes(latest.status)) {
-          pollTimers.set(task.id, window.setTimeout(poll, 900))
-        } else {
-          stopPolling(task.id)
-        }
-      } catch {
-        stopPolling(task.id)
-      }
-    }
-    pollTimers.set(task.id, window.setTimeout(poll, 900))
-  }
-
-  /** 不传 id 时停止全部轮询（供页面卸载时调用） */
-  function stopPolling(id?: string) {
-    if (id === undefined) {
-      Array.from(pollingIds).forEach((item) => stopPolling(item))
-      return
-    }
-    const timer = pollTimers.get(id)
-    if (timer) window.clearTimeout(timer)
-    pollTimers.delete(id)
-    pollingIds.delete(id)
+  function removeResult(id: string) {
+    results.value = results.value.filter((item) => item.id !== id)
   }
 
   function resetForm() {
-    Object.assign(form, createForm())
-  }
-
-  function setStatus(status: string) {
-    query.status = status
-    query.page = 1
-    fetchList()
-  }
-
-  function setKeyword(keyword: string) {
-    query.keyword = keyword
-    query.page = 1
-    fetchList()
+    const next = createForm()
+    next.model = form.model // 保留已选模型
+    Object.assign(form, next)
   }
 
   return {
-    form, query, list, total, loading, submitting, error, detail, detailLoading, detailError,
-    pageCount, generatingCount, fetchList, fetchDetail, createTask, retryTask, removeTask,
-    startPolling, stopPolling, resetForm, setStatus, setKeyword,
+    form, results, submitting, error,
+    models, modelsLoading, modelsError, hasResults, currentModel,
+    fetchModels, createTask, clearResults, removeResult, resetForm,
   }
 })

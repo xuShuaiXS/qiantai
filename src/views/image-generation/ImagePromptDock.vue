@@ -10,7 +10,7 @@
 import { computed, ref } from 'vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
-import { IMAGE_MODELS, IMAGE_SIZES } from '@/stores/imageGeneration'
+import { IMAGE_SIZES, useImageGenerationStore } from '@/stores/imageGeneration'
 import { useMessage } from '@/composables/useMessage'
 
 const props = defineProps({
@@ -20,9 +20,15 @@ const props = defineProps({
 })
 const emit = defineEmits(['generate', 'clear-effect'])
 const message = useMessage()
+/** 模型列表来自后端配置（store.fetchModels()），不再是本地假数据 */
+const imageStore = useImageGenerationStore()
 const advancedVisible = ref(false)
 const placeholder = computed(() => props.selectedEffect?.hint || '描述你的创意灵感，极光AI 会将文字变成画面…')
 const canGenerate = computed(() => props.form.prompt.trim().length >= 4 && !props.submitting)
+const modelOptions = computed(() => {
+  if (imageStore.models.length) return imageStore.models
+  return [{ value: '', label: imageStore.modelsLoading ? '模型加载中…' : '无可用模型', desc: imageStore.modelsError }]
+})
 /**
  * 左侧让位：外层 ToolsShell 会把侧栏宽度写入全局变量 --tools-sider-w，
  * .dock-layer 用它做 fixed 定位的 left 偏移（移动端媒体查询里归零）。
@@ -33,9 +39,6 @@ const sizeOptions = computed(() => IMAGE_SIZES.map((item) => ({ value: item.valu
 function showExample() {
   props.form.prompt = props.selectedEffect?.example || '一座漂浮在云海上的未来城市，清晨金色阳光，电影级构图'
   message.info('已填入示例提示词，可直接生成或继续编辑')
-}
-function uploadImage() {
-  message.info('演示环境暂不支持上传图片，可直接输入提示词创作')
 }
 </script>
 
@@ -58,17 +61,20 @@ function uploadImage() {
 
         <div class="prompt-dock__toolbar">
           <div class="prompt-dock__options">
-            <BaseSelect v-model="form.model" :options="IMAGE_MODELS" label="模型" icon="🏆" drop="up" />
+            <BaseSelect v-model="form.model" :options="modelOptions" label="模型" icon="🏆" drop="up" />
             <BaseSelect v-model="form.count" :options="countOptions" label="数量" icon="🖼" drop="up" />
             <BaseSelect v-model="form.size" :options="sizeOptions" label="比例" icon="▢" drop="up" />
             <button class="dock-btn" :class="{ 'is-open': advancedVisible }" type="button" @click="advancedVisible = !advancedVisible">
               <SvgIcon name="settings" :size="14" />高级设置
             </button>
-            <button class="dock-btn" type="button" @click="uploadImage"><SvgIcon name="upload" :size="14" />上传图片</button>
+            <!--
+              上传参考图入口已移除：后端 /chat/images/generations 为纯文生图，
+              不接收 image 参考图（已实测该字段被忽略），保留按钮会形成假功能。
+            -->
             <button class="dock-btn dock-btn--example" type="button" @click="showExample"><i>💡</i>查看示例</button>
           </div>
           <button class="btn btn--primary prompt-dock__submit" type="button" :disabled="!canGenerate" @click="emit('generate')">
-            <SvgIcon name="sparkles" :size="15" />{{ submitting ? '正在创建…' : '立即生成' }}
+            <SvgIcon name="sparkles" :size="15" />{{ submitting ? '生成中…' : '立即生成' }}
           </button>
         </div>
 
