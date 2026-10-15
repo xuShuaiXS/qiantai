@@ -55,39 +55,45 @@ async function toggleFav(agent: AgentItem) {
 
 <template>
   <div class="agent-page">
-    <!-- Hero -->
+    <!-- Hero：居中标题 + 双入口卡（样式对齐目标 UI：白卡 + 插画块 + 绿色主按钮） -->
     <header class="agent-hero">
-      <div class="agent-hero__intro">
-        <h1 class="agent-hero__title">超级<em>智能体</em></h1>
-        <p class="agent-hero__sub">创建你的 APP 或助手 —— 通过自定义模型、提示词和界面，让 AI 完成你的专属任务</p>
-      </div>
+      <h1 class="agent-hero__title"><em>超级智能体</em>，创建你的 APP 或助手</h1>
+      <p class="agent-hero__sub">释放AI潜能，通过自定义模型、提示词和界面，打造属于你的智能应用。</p>
+
       <div class="agent-hero__cards">
-        <section class="agent-entry agent-entry--create">
-          <div class="agent-entry__head">
-            <span>创建智能体</span>
-            <span class="agent-entry__badge">人人可用</span>
+        <section class="agent-entry">
+          <div class="agent-entry__art" aria-hidden="true">
+            <span class="agent-entry__art-line" /><span class="agent-entry__art-line" /><span class="agent-entry__art-line" />
+            <span class="agent-entry__art-chip">✨ AI 生成内容</span>
           </div>
-          <ul class="agent-entry__feats">
-            <li>支持自定义知识库</li>
-            <li>多模型选择</li>
-          </ul>
-          <button class="agent-entry__btn" @click="openCreate">立即创建</button>
+          <div class="agent-entry__body">
+            <h3 class="agent-entry__title">创建智能体</h3>
+            <p class="agent-entry__desc">创建专属智能体，自然语言驱动的助手</p>
+            <ul class="agent-entry__feats">
+              <li>支持自定义知识库</li>
+              <li>多模型选择</li>
+            </ul>
+            <button class="agent-entry__btn" type="button" @click="openCreate">＋ 立即创建</button>
+          </div>
         </section>
-        <section class="agent-entry agent-entry--group">
-          <div class="agent-entry__head">
-            <span>创建多智能体群</span>
-            <span class="agent-entry__badge">即将上线</span>
+
+        <section class="agent-entry">
+          <div class="agent-entry__art agent-entry__art--group" aria-hidden="true">
+            <span class="agent-entry__node" /><span class="agent-entry__node" /><span class="agent-entry__node" />
           </div>
-          <ul class="agent-entry__feats">
-            <li>多智能体协同作业</li>
-            <li>任务自动编排</li>
-          </ul>
-          <button class="agent-entry__btn" disabled>敬请期待</button>
+          <div class="agent-entry__body">
+            <h3 class="agent-entry__title">
+              创建多智能体集群
+              <span class="agent-entry__soon">● 即将上线</span>
+            </h3>
+            <p class="agent-entry__desc">创建多个智能体协作的智能体集群</p>
+            <button class="agent-entry__btn" type="button" disabled>敬请期待</button>
+          </div>
         </section>
       </div>
     </header>
 
-    <!-- Tabs + 搜索 -->
+    <!-- Tabs + 搜索 + 热门标签（两行布局，对齐目标 UI） -->
     <div class="agent-toolbar">
       <nav class="agent-tabs">
         <button
@@ -100,28 +106,30 @@ async function toggleFav(agent: AgentItem) {
           {{ t.label }}
         </button>
       </nav>
-      <div class="agent-search">
-        <input
-          v-model="searchInput"
-          placeholder="搜索智能体名称、描述或标签"
-          @keydown.enter="doSearch"
-        />
-        <button class="agent-search__btn" @click="doSearch">搜索</button>
+      <div class="agent-toolbar__row">
+        <div class="agent-search">
+          <input
+            v-model="searchInput"
+            placeholder="搜索智能体..."
+            @keydown.enter="doSearch"
+          />
+          <button class="agent-search__btn" aria-label="搜索" @click="doSearch">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.8-3.8" /></svg>
+          </button>
+        </div>
+        <div class="agent-hot">
+          <span class="agent-hot__label">热门标签:</span>
+          <button
+            v-for="t in store.hotTags"
+            :key="t"
+            class="agent-hot__tag"
+            :class="{ 'is-active': store.activeTag === t }"
+            @click="store.setTag(t)"
+          >
+            {{ t }}
+          </button>
+        </div>
       </div>
-    </div>
-
-    <!-- 热门标签 -->
-    <div class="agent-hot">
-      <span class="agent-hot__label">热门标签：</span>
-      <button
-        v-for="t in store.hotTags"
-        :key="t"
-        class="agent-hot__tag"
-        :class="{ 'is-active': store.activeTag === t }"
-        @click="store.setTag(t)"
-      >
-        {{ t }}
-      </button>
     </div>
 
     <!-- 主体：分类栏 + 卡片网格 -->

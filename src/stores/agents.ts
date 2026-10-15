@@ -29,10 +29,11 @@ export const useAgentsStore = defineStore('agents', () => {
 
   /* ------------------------------ helpers ------------------------------ */
 
-  /** 把当前登录用户名同步给 api 层（X-User 头 / mock 的"我创建的"过滤） */
+  /** 把当前登录用户名同步给 api 层（X-User 头 / mock 的"我创建的"过滤）。
+   *  未登录或 8080 宕机取不到用户时，保留浏览器里上次的身份，避免漂移。 */
   function syncUsername() {
     const auth = useAuthStore()
-    agentsApi.setCurrentUsername(auth.user?.username || 'admin')
+    agentsApi.setCurrentUsername(auth.user?.username)
   }
 
   async function loadMeta() {

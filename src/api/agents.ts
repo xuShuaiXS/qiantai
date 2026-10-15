@@ -73,10 +73,13 @@ function currentUsername(): string {
   }
 }
 
-/** 记录当前用户名（由 store 在登录态变化时调用），供 X-User 头与 mock 的"我创建的"使用 */
-export function setCurrentUsername(name: string) {
+/** 记录当前用户名（由 store 在登录态变化时调用），供 X-User 头与 mock 的"我创建的"使用。
+ *  传入空值时保留原值——8080 宕机导致取不到用户信息时，身份不漂移，
+ *  否则"我创建的"会因创建时与查询时的用户名不一致而查不到。 */
+export function setCurrentUsername(name?: string) {
+  if (!name) return
   try {
-    localStorage.setItem('jiguang_current_username', name || 'admin')
+    localStorage.setItem('jiguang_current_username', name)
   } catch {
     /* ignore */
   }
