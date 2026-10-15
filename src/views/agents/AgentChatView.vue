@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import '@/assets/css/agents.css'
 import { fetchModelFamilies, streamChat } from '@/api/chat'
 import { getToken } from '@/api/auth'
+import { renderMarkdown } from '@/utils/markdown'
 import type { AgentItem } from '@/api/agents'
 import { getAgent } from '@/api/agents'
 
@@ -124,6 +125,30 @@ function onKeydown(e: KeyboardEvent) {
 function goBack() {
   router.push('/agents')
 }
+
+/** 代码块复制按钮（markdown 渲染产物内的事件委托） */
+async function onMdClick(e: MouseEvent) {
+  const btn = (e.target as HTMLElement | null)?.closest?.('.md-code-copy') as HTMLElement | null
+  if (!btn) return
+  e.preventDefault()
+  const block = btn.closest('.md-code-block')
+  const code = block?.querySelector('code')?.textContent || ''
+  if (!code) return
+  try {
+    await navigator.clipboard.writeText(code)
+    btn.classList.add('copied')
+    btn.textContent = '已复制'
+    setTimeout(() => {
+      btn.classList.remove('copied')
+      btn.textContent = '复制'
+    }, 1500)
+  } catch {
+    btn.textContent = '复制失败'
+    setTimeout(() => {
+      btn.textContent = '复制'
+    }, 1500)
+  }
+}
 </script>
 
 <template>
@@ -143,7 +168,7 @@ function goBack() {
     </header>
 
     <div ref="msgsEl" class="agent-chat__msgs">
-      <div class="agent-chat__inner">
+      <div class="agent-chat__inner" @click="onMdClick">
         <template v-if="messages.length">
           <div
             v-for="(m, i) in messages"
@@ -152,10 +177,16 @@ function goBack() {
             :class="m.role === 'user' ? 'agent-msg--user' : 'agent-msg--assistant'"
           >
             <div class="agent-msg__role">{{ m.role === 'user' ? '🧑' : agent?.avatar || '🤖' }}</div>
-            <div class="agent-msg__bubble">
-              <template v-if="m.content">{{ m.content }}</template>
-              <span v-else class="agent-typing"><i /><i /><i /></span>
+            <!-- 助手消息渲染 Markdown（标题/列表/表格/代码块），用户消息保持纯文本 -->
+            <div
+              v-if="m.role === 'assistant' && m.content"
+              class="agent-msg__bubble agent-md"
+              v-html="renderMarkdown(m.content)"
+            />
+            <div v-else-if="m.role === 'assistant'" class="agent-msg__bubble">
+              <span class="agent-typing"><i /><i /><i /></span>
             </div>
+            <div v-else class="agent-msg__bubble">{{ m.content }}</div>
           </div>
         </template>
         <div v-else class="agent-empty" style="padding-top: 120px">

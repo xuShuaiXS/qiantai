@@ -94,7 +94,10 @@ async function apiJSON<T>(path: string, init?: RequestInit): Promise<T> {
     // 后端不可达时 15s 快速失败，避免界面无响应
     signal: AbortSignal.timeout(15000),
   })
-  const body = await res.json()
+  const body = (await res.json().catch(() => null)) as
+    | { code?: number; message?: string; data?: T }
+    | null
+  if (!body) throw new Error('服务器响应异常，请稍后重试')
   if (body.code !== 0) throw new Error(body.message || `请求失败 ${res.status}`)
   return body.data as T
 }

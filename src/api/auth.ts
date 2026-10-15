@@ -29,9 +29,16 @@ export interface AuthResult {
 const AUTH_TIMEOUT = 15000
 
 async function parseAuthBody(res: Response, fallback: string): Promise<AuthResult> {
-  const body = await res.json()
+  // 后端/代理偶发返回空响应体（502/504/断流）时 res.json() 会抛
+  // "Unexpected end of JSON input"，这里转成可读提示
+  let body: { code?: number; message?: string; data?: AuthResult }
+  try {
+    body = await res.json()
+  } catch {
+    throw new Error(res.ok ? '服务器响应异常，请稍后重试' : `服务器错误（${res.status}），请稍后重试`)
+  }
   if (body.code !== 0) throw new Error(body.message || fallback)
-  return body.data
+  return body.data as AuthResult
 }
 
 export async function loginApi(username: string, password: string): Promise<AuthResult> {
@@ -63,7 +70,12 @@ export async function meApi(): Promise<UserProfile> {
     headers: { Authorization: `Bearer ${getToken()}` },
     signal: AbortSignal.timeout(AUTH_TIMEOUT),
   })
-  const body = await res.json()
+  let body: { code?: number; message?: string; data?: UserProfile }
+  try {
+    body = await res.json()
+  } catch {
+    throw new Error('服务器响应异常，请稍后重试')
+  }
   if (body.code !== 0) throw new Error(body.message || '未登录')
-  return body.data
+  return body.data as UserProfile
 }
