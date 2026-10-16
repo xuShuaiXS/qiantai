@@ -88,6 +88,23 @@ const routes: RouteRecordRaw[] = [
   },
 
   /*
+   * 「视频生成」栏目：文生视频（网关 /videos 异步任务协议）。
+   */
+  {
+    path: '/video-generation',
+    component: () => import('@/views/tools/ToolsShell.vue'),
+    meta: { public: true, shell: 'tools' },
+    children: [
+      {
+        path: '',
+        name: 'VideoGeneration',
+        component: () => import('@/views/video-generation/VideoGenerationView.vue'),
+        meta: { title: '视频生成 - 极光AI', public: true },
+      },
+    ],
+  },
+
+  /*
    * 「超级智能体」栏目：市场页 + 智能体对话页，同样挂在 ToolsShell 下。
    * 市场数据走 src/api/agents.ts 双模式：默认前端 Mock（内置种子数据 + localStorage），
    * 配置 VITE_AGENTS_API=/agent-api 后切换到本地 Nest 后端（vite 代理转发）。

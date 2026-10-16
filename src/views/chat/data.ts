@@ -222,6 +222,7 @@ export const navSections: NavSection[] = [
         name: "视频生成3.0",
         key: "video",
         icon: "https://file.1foo.com/2025/04/07/1909fa4b12c2eb5c50c6b287ac2d4458.svg",
+        route: "/video-generation",
       },
       {
         name: "Sound音乐",
