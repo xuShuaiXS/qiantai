@@ -7,6 +7,8 @@ import { createImageTask, fetchImageModels } from '@/api/imageGeneration'
 import type { ImageModelOption, ImageTask } from '@/api/imageGeneration'
 import { IMAGE_SIZES } from '@/stores/imageGeneration'
 import BaseSelect from '@/components/BaseSelect.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
+import { downloadImage } from '@/utils/download'
 
 const router = useRouter()
 const message = useMessage()
@@ -217,16 +219,28 @@ function goEditing() {
             <span>{{ task.errorMessage }}</span>
           </div>
           <div v-else class="draw-result__imgs">
-            <a
+            <div
               v-for="img in task.images"
               :key="img.index"
-              class="draw-result__img"
-              :href="img.url"
-              target="_blank"
-              rel="noopener"
+              class="draw-result__imgwrap"
             >
-              <img :src="img.url" :alt="task.prompt" loading="lazy" />
-            </a>
+              <a
+                class="draw-result__img"
+                :href="img.url"
+                target="_blank"
+                rel="noopener"
+              >
+                <img :src="img.url" :alt="task.prompt" loading="lazy" />
+              </a>
+              <button
+                class="draw-result__dl"
+                type="button"
+                title="下载到本地"
+                @click.stop="downloadImage(img.url, task.prompt)"
+              >
+                <SvgIcon name="download" :size="14" />下载
+              </button>
+            </div>
           </div>
         </div>
         <footer class="draw-result__meta">

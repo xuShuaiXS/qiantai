@@ -302,6 +302,19 @@
 
 .draw-result__img:hover img { transform: scale(1.03); }
 
+/* 悬浮下载按钮：hover 图片时右下角浮现 */
+.draw-result__imgwrap { position: relative; overflow: hidden; border-radius: 10px; }
+.draw-result__imgwrap .draw-result__img { border-radius: 0; }
+.draw-result__dl {
+  position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px;
+  height: 30px; padding: 0 12px; border: none; border-radius: 999px;
+  background: rgba(23, 36, 44, 0.72); color: #fff; font-size: 12px; cursor: pointer;
+  opacity: 0; transform: translateY(6px); transition: all 0.2s ease; backdrop-filter: blur(4px);
+}
+.draw-result__imgwrap:hover .draw-result__dl { opacity: 1; transform: translateY(0); }
+.draw-result__dl:hover { background: var(--draw-primary); }
+@media (hover: none) { .draw-result__dl { opacity: 1; transform: none; } } /* 触屏设备常显 */
+
 .draw-result__meta {
   display: flex;
   flex-direction: column;

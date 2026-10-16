@@ -10,6 +10,7 @@ import { useImageGenerationStore, IMAGE_EFFECTS, IMAGE_EFFECT_CATEGORIES } from 
 import { useMessage } from '@/composables/useMessage'
 import SvgIcon from '@/components/SvgIcon.vue'
 import ImagePromptDock from './ImagePromptDock.vue'
+import { downloadImage } from '@/utils/download'
 
 const store = useImageGenerationStore()
 const message = useMessage()
@@ -125,17 +126,29 @@ async function generate() {
               <p>{{ task.errorMessage }}</p>
             </div>
             <template v-else>
-              <a
+              <div
                 v-for="img in task.images"
                 :key="img.index"
-                class="ig-result__img"
-                :href="img.url"
-                target="_blank"
-                rel="noopener"
-                :title="'点击查看原图'"
+                class="ig-result__imgwrap"
               >
-                <img :src="img.url" :alt="task.prompt" loading="lazy" />
-              </a>
+                <a
+                  class="ig-result__img"
+                  :href="img.url"
+                  target="_blank"
+                  rel="noopener"
+                  :title="'点击查看原图'"
+                >
+                  <img :src="img.url" :alt="task.prompt" loading="lazy" />
+                </a>
+                <button
+                  class="ig-result__dl"
+                  type="button"
+                  title="下载到本地"
+                  @click.stop="downloadImage(img.url, task.prompt)"
+                >
+                  <SvgIcon name="download" :size="14" />下载
+                </button>
+              </div>
             </template>
           </div>
           <footer class="ig-result__meta">
@@ -196,6 +209,19 @@ async function generate() {
 .ig-result__img { display: block; overflow: hidden; border-radius: var(--radius); background: var(--c-bg-hover); }
 .ig-result__img img { width: 100%; height: 100%; max-height: 360px; object-fit: cover; display: block; transition: transform .25s ease; }
 .ig-result__img:hover img { transform: scale(1.03); }
+
+/* 悬浮下载按钮：hover 图片时右下角浮现 */
+.ig-result__imgwrap { position: relative; overflow: hidden; border-radius: var(--radius); }
+.ig-result__imgwrap .ig-result__img { border-radius: 0; }
+.ig-result__dl {
+  position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px;
+  height: 30px; padding: 0 12px; border: none; border-radius: 999px;
+  background: rgba(23, 36, 44, 0.72); color: #fff; font-size: 12px; cursor: pointer;
+  opacity: 0; transform: translateY(6px); transition: all .2s ease; backdrop-filter: blur(4px);
+}
+.ig-result__imgwrap:hover .ig-result__dl { opacity: 1; transform: translateY(0); }
+.ig-result__dl:hover { background: var(--c-primary); }
+@media (hover: none) { .ig-result__dl { opacity: 1; transform: none; } } /* 触屏设备常显 */
 
 .ig-result__state { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 180px; padding: 20px; color: var(--c-text-secondary); font-size: 13px; text-align: center; }
 .ig-result__state--error { color: var(--c-danger); background: var(--c-danger-light); border-radius: var(--radius); }
