@@ -23,7 +23,7 @@ router.beforeEach(async (to) => {
     if (!auth.bootstrapped) {
       await auth.ensureSession()
     }
-    if (to.path === '/login') return '/'
+    // /login 不再强制弹回首页：用户可主动来注册账号或切换身份
     return true
   }
 

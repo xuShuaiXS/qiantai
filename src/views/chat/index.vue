@@ -9,7 +9,6 @@ import ImageGenPlaceholder from './components/ImageGenPlaceholder.vue'
 import { useTypewriter } from './composables/useTypewriter'
 import { useGenerationJobs } from './composables/useGenerationJobs'
 import { useRouter } from 'vue-router'
-import { REQUIRE_LOGIN } from '@/config/runtime'
 import {
   appendChatMessages,
   batchDeleteChatSessions,
@@ -859,8 +858,8 @@ function newChat() {
 function logout() {
   stopAll()
   auth.logout()
-  // 免登录模式下没有登录页可回，直接回首页（守卫会静默重建会话）
-  router.replace(REQUIRE_LOGIN ? '/login' : '/')
+  // 退出 = 明确要离开当前身份，统一落到登录页（可重新登录或注册新账号）
+  router.replace('/login')
 }
 
 function onDocClick() {
