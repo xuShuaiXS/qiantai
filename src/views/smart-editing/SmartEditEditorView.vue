@@ -1,41 +1,41 @@
 <script setup>
 /**
- * 新AI修图 · 深色编辑器（正式环境实现）
+ * 新AI修图 · 深色编辑器（对话式修图）
  *
- * 布局：
- *   左侧画布区：顶部「我的创作（作品数）」→ 中央画布（上传原图 / 生成结果）→ 底部工具条（添加/缩放/撤销/恢复）
- *   右侧面板：新建项目 → 上传引导 → 底部修图指令输入区（模型选择 / 选择图片 / 发送）
+ * 布局（参考设计稿）：
+ *   左侧画布区：顶部「我的创作（作品数）」→ 中央画布只展示当前对应图片 → 底部工具条
+ *   右侧对话面板：顶部标题 + 生图模型选择 → 对话消息流
+ *                （用户消息带原图缩略图 / AI 流式分析 + 生成结果缩略图 / 快捷指令）
+ *                → 底部输入区（附件 / 分析模型选择 / 发送）
  *
- * 真实能力说明：
- *   - 上传：调用后端 /chat/upload（multipart file）
- *   - 生成：调用后端 /chat/images/generations，模型来自后端图片能力配置
- *   - 撤销/恢复：基于本地图片历史栈
- *   - 注意：后端目前没有 /chat/images/edits（图生图/局部重绘）接口，
- *     因此修图指令是按「文本指令驱动生成」执行的；待后端提供编辑接口后，
- *     只需在 send() 中改为调用该接口并把原图一并上传即可。
+ * 修图链路（中转站暂不支持图生图）：
+ *   1. 用户上传图片 + 输入修改要求
+ *   2. 对话模型（Chat-xs，识图）流式分析修改要点，并输出【生图提示词】
+ *   3. 提取提示词 → 文生图模型（gpt-image 系列）重新绘制整张图
+ *   4. 生成结果进入对话与画布，可撤销/恢复
+ *   识图失败时自动降级为纯文本分析；未上传图片则指令直接作为生图提示词。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useMessage } from '@/composables/useMessage'
 import { createImageTask, fetchImageModels, uploadImage } from '@/api/imageGeneration'
+import { fetchModelFamilies, streamChat } from '@/api/chat'
+import { getToken } from '@/api/auth'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const message = useMessage()
 
-/* ---------------- 模型（来自后端配置） ---------------- */
+/* ---------------- 生图模型（后端图片能力配置） ---------------- */
 const models = ref([])
 const modelValue = ref('')
 const modelOpen = ref(false)
 const currentModelLabel = computed(
-  () => models.value.find((item) => item.value === modelValue.value)?.label || '选择模型',
+  () => models.value.find((item) => item.value === modelValue.value)?.label || '选择生图模型',
 )
 
 async function loadModels() {
   try {
     models.value = await fetchImageModels()
-    if (!models.value.length) {
-      message.warning('后端暂未配置图片模型，请先在控制台配置厂商与模型')
-      return
-    }
-    if (!models.value.some((item) => item.value === modelValue.value)) {
+    if (models.value.length && !models.value.some((item) => item.value === modelValue.value)) {
       modelValue.value = models.value[0].value
     }
   } catch (err) {
@@ -45,6 +45,36 @@ async function loadModels() {
 function pickModel(value) {
   modelValue.value = value
   modelOpen.value = false
+}
+
+/* ---------------- 对话模型（Chat-xs，识图分析用） ---------------- */
+const chatModels = ref([])
+const chatModel = ref('glm-5.3-flash')
+const chatModelOpen = ref(false)
+const chatModelLabel = computed(
+  () => chatModels.value.find((item) => item.value === chatModel.value)?.label || chatModel.value || '分析模型',
+)
+
+async function loadChatModels() {
+  if (!getToken()) return
+  try {
+    const families = await fetchModelFamilies()
+    const options = families
+      .filter((f) => f.providerCode === 'gpt-xs' && f.capability === 'chat')
+      .flatMap((f) => (f.variants || []).map((v) => ({ value: v.modelId, label: v.name, desc: f.name })))
+    if (options.length) {
+      chatModels.value = options
+      if (!options.some((item) => item.value === chatModel.value)) {
+        chatModel.value = options[0].value
+      }
+    }
+  } catch {
+    /* 分析模型拉取失败时用默认 glm-5.3-flash */
+  }
+}
+function pickChatModel(value) {
+  chatModel.value = value
+  chatModelOpen.value = false
 }
 
 /* ---------------- 画布与历史 ---------------- */
@@ -68,6 +98,10 @@ function pushHistory(url) {
   currentImage.value = url
 }
 
+function showOnCanvas(url) {
+  if (url) currentImage.value = url
+}
+
 /* ---------------- 图片选择与上传 ---------------- */
 function pickFile() {
   fileInput.value?.click()
@@ -85,7 +119,13 @@ async function onFileChange(event) {
     const url = await uploadImage(file)
     sourceImage.value = url
     pushHistory(url)
-    message.success('图片已上传，可在右侧输入修图指令')
+    chat.value.push({
+      role: 'user',
+      text: '（上传了原图，请在下方输入修改要求）',
+      imageUrl: url,
+    })
+    scrollBottom()
+    message.success('图片已上传，输入修改要求开始修图')
   } catch (err) {
     message.error(err?.message || '图片上传失败')
   } finally {
@@ -111,8 +151,51 @@ function redo() {
   currentImage.value = history.value[historyIndex.value] || ''
 }
 
-/* ---------------- 提交修图指令 ---------------- */
+/* ---------------- 对话式修图 ---------------- */
+const CHAT_SYSTEM = [
+  '你是AI修图助手。用户上传了一张图片并提出修改要求。',
+  '请先用一两句话分析修改要点，然后必须另起一行输出：',
+  '【生图提示词】+ 一段完整的中文画面描述。',
+  '提示词要求：保留原图的主体、构图与风格特征，把用户的修改要求融合进去，',
+  '形成可供文生图模型重新绘制整张图的完整描述（不要只写修改点）。',
+  '除这两部分外不要输出其他内容。',
+].join('\n')
+
+const QUICK_ACTIONS = [
+  '换成粉色裙子',
+  '背景换成海边',
+  '调整为夜景氛围',
+  '改成动漫风格',
+  '增加柔和光线',
+  '换一套白色西装',
+]
+
+const chat = ref([])
+const chatEl = ref(null)
 const instruction = ref('')
+
+function scrollBottom() {
+  nextTick(() => {
+    const el = chatEl.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+/** 组装发给分析模型的消息（带原图供识图；失败时降级纯文本重试） */
+function buildAnalyzeMessages(text, withImage) {
+  const historyMsgs = []
+  // 仅带最近一轮生成提示词，控制上下文长度
+  const lastPrompt = [...chat.value].reverse().find((m) => m.role === 'assistant' && m.prompt)
+  if (lastPrompt) historyMsgs.push({ role: 'assistant', content: lastPrompt.prompt })
+  const userContent = withImage && sourceImage.value
+    ? [
+        { type: 'text', text: `修改要求：${text}\n请按系统要求输出分析与【生图提示词】。` },
+        { type: 'image_url', image_url: { url: resolveMediaUrl(sourceImage.value) } },
+      ]
+    : `修改要求：${text}\n（未能读取图片）请按系统要求输出分析与【生图提示词】，画面细节按常见情况合理假设。`
+  historyMsgs.push({ role: 'user', content: userContent })
+  return [{ role: 'system', content: CHAT_SYSTEM }, ...historyMsgs]
+}
 
 async function send() {
   const text = instruction.value.trim()
@@ -121,30 +204,80 @@ async function send() {
     return
   }
   if (!modelValue.value) {
-    message.warning('暂无可用图片模型，请先在控制台配置')
+    message.warning('暂无可用生图模型，请先在控制台配置')
     return
   }
   sending.value = true
+  const userImageUrl = currentImage.value || sourceImage.value
+  chat.value.push({ role: 'user', text, imageUrl: userImageUrl })
+  instruction.value = ''
+  scrollBottom()
+
+  const ai = reactive({ role: 'assistant', text: '', imageUrl: '', state: 'analyzing', prompt: '', error: '' })
+  chat.value.push(ai)
+
   try {
+    const hasImage = !!sourceImage.value
+    // 1) 对话模型流式分析（识图失败自动降级为纯文本）
+    try {
+      await streamChat({
+        model: chatModel.value,
+        messages: buildAnalyzeMessages(text, hasImage),
+        onDelta(t) {
+          ai.text += t
+          scrollBottom()
+        },
+      })
+    } catch (err) {
+      if (hasImage) {
+        ai.text = ''
+        await streamChat({
+          model: chatModel.value,
+          messages: buildAnalyzeMessages(text, false),
+          onDelta(t) {
+            ai.text += t
+            scrollBottom()
+          },
+        })
+      } else {
+        throw err
+      }
+    }
+    if (!ai.text.trim()) ai.text = '（模型没有返回分析内容，将直接按您的描述生成）'
+
+    // 2) 提取【生图提示词】（无标记则将全文作为提示词）
+    const matched = ai.text.match(/【生图提示词】\s*([\s\S]+)/)
+    const prompt = (matched ? matched[1] : ai.text).trim().slice(0, 900)
+    ai.prompt = prompt || text
+    ai.state = 'generating'
+    scrollBottom()
+
+    // 3) 文生图（中转站暂不支持图生图，整体重新绘制）
     const task = await createImageTask({
-      prompt: text,
+      prompt: ai.prompt,
       model: modelValue.value,
       size: '1024x1024',
       count: 1,
     })
     if (task.status === 'failed' || !task.images.length) {
-      message.error(task.errorMessage || '生成失败，请稍后重试')
-      return
+      ai.state = 'error'
+      ai.error = task.errorMessage || '生成失败，请稍后重试'
+    } else {
+      ai.state = 'done'
+      ai.imageUrl = task.images[0].url
+      pushHistory(task.images[0].url)
     }
-    pushHistory(task.images[0].url)
-    instruction.value = ''
-    message.success('已生成修图结果')
   } catch (err) {
-    // 此前缺少 catch：接口异常时静默失败，表现为"点击后没反应"
-    message.error(err instanceof Error ? err.message : '生成失败，请稍后重试')
+    ai.state = 'error'
+    ai.error = err instanceof Error ? err.message : '生成失败，请稍后重试'
   } finally {
     sending.value = false
+    scrollBottom()
   }
+}
+
+function applyQuick(text) {
+  instruction.value = instruction.value.trim() ? `${instruction.value.trim()}，${text}` : text
 }
 
 /* ---------------- 新建项目 ---------------- */
@@ -154,11 +287,15 @@ function newProject() {
   history.value = []
   historyIndex.value = -1
   instruction.value = ''
+  chat.value = []
   zoom.value = 100
   message.info('已开始新的修图项目')
 }
 
-onMounted(loadModels)
+onMounted(() => {
+  loadModels()
+  loadChatModels()
+})
 </script>
 
 <template>
@@ -170,7 +307,7 @@ onMounted(loadModels)
         <span class="canvas-top__creation"><i>👤</i>我的创作<span class="canvas-top__count">（{{ workCount }} 张图片）</span></span>
       </header>
 
-      <!-- 中央画布：未上传时引导上传，已有图片则展示当前（原图/生成结果） -->
+      <!-- 中央画布：只展示当前对应的图片 -->
       <div class="canvas-stage">
         <div class="canvas-stage__inner" :style="{ transform: `scale(${zoom / 100})` }">
           <template v-if="currentImage">
@@ -186,8 +323,8 @@ onMounted(loadModels)
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg>
               </span>
               <strong>{{ uploading ? '正在上传…' : '选择图片' }}</strong>
-              <small>支持 JPG / PNG / WEBP，上传后在右侧输入修图指令</small>
-              <small style="display:block; margin-top:6px; color:#8b93a8;">当前后端暂不支持基于原图修改，生成将按文字描述重新绘制画面</small>
+              <small>支持 JPG / PNG / WEBP，上传后在右侧对话中输入修改要求</small>
+              <small style="display:block; margin-top:6px; color:#8b93a8;">当前中转站暂不支持基于原图修改，生成将按文字描述重新绘制画面</small>
             </button>
           </template>
         </div>
@@ -205,7 +342,7 @@ onMounted(loadModels)
         </button>
         <button class="tool-btn tool-btn--zoom" type="button" @click="resetZoom">{{ zoom }}%</button>
         <button class="tool-btn" type="button" @click="adjustZoom(10)">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><path d="M8 11h6" /><path d="M11 8v6" /></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><path d="M11 8v6" /></svg>
         </button>
         <span class="tool-divider" />
         <button class="tool-btn" type="button" :disabled="!canUndo" @click="undo">
@@ -219,27 +356,105 @@ onMounted(loadModels)
       </footer>
     </main>
 
-    <!-- 右侧面板 -->
+    <!-- 右侧：对话面板 -->
     <aside class="editor-side">
-      <!-- 新建项目 -->
-      <button class="side-project" type="button" @click="newProject">
-        <span class="side-project__icon">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
-        </span>
-        <span class="side-project__text">
-          <strong>新建项目</strong>
-          <small>开始新的修图对话</small>
-        </span>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-      </button>
+      <!-- 面板头：标题 + 生图模型 -->
+      <header class="side-head">
+        <div class="side-head__title">
+          <span class="side-head__avatar">🎨</span>
+          <div>
+            <strong>智能修图助手</strong>
+            <small>上传图片，描述修改要求</small>
+          </div>
+        </div>
+        <!-- 生图模型选择 -->
+        <div class="bar-model-wrap">
+          <button class="bar-model" type="button" :disabled="!models.length" @click="modelOpen = !modelOpen; chatModelOpen = false">
+            <span class="bar-model__avatar">🖼</span>
+            {{ currentModelLabel }}
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+          <ul v-if="modelOpen" class="bar-model__menu">
+            <li v-for="item in models" :key="item.value">
+              <button
+                class="bar-model__item"
+                :class="{ 'is-active': item.value === modelValue }"
+                type="button"
+                @click="pickModel(item.value)"
+              >
+                <strong>{{ item.label }}</strong>
+                <small>生图模型 · {{ item.desc }}</small>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </header>
 
-      <!-- 引导区 -->
-      <div class="side-empty">
-        <span class="side-empty__icon">💬</span>
-        <p>{{ currentImage ? '输入指令，开始您的AI修图' : '上传一张图片开始您的AI修图之旅~' }}</p>
-        <button class="side-empty__demo" type="button" :disabled="uploading" @click="pickFile">
-          {{ uploading ? '正在上传…' : '选择图片' }} <i>⬆</i>
-        </button>
+      <!-- 对话消息流 -->
+      <div ref="chatEl" class="side-chat">
+        <template v-if="chat.length">
+          <div
+            v-for="(m, i) in chat"
+            :key="i"
+            class="chat-msg"
+            :class="m.role === 'user' ? 'chat-msg--user' : 'chat-msg--ai'"
+          >
+            <div class="chat-msg__avatar">{{ m.role === 'user' ? '🧑' : '🎨' }}</div>
+            <div class="chat-msg__col">
+              <!-- 消息附图（用户原图 / AI 生成结果），点击同步到左侧画布 -->
+              <button
+                v-if="m.imageUrl"
+                class="chat-msg__img"
+                type="button"
+                :title="'在左侧画布中查看'"
+                @click="showOnCanvas(m.imageUrl)"
+              >
+                <img :src="m.imageUrl" alt="消息图片" loading="lazy" />
+              </button>
+              <!-- 文本：AI 分析（流式）/ 用户指令 / 错误信息 -->
+              <div
+                v-if="m.role === 'assistant' ? (m.text || m.state === 'analyzing' || m.error) : m.text"
+                class="chat-msg__bubble"
+                :class="{ 'chat-msg__bubble--error': m.state === 'error' }"
+              >
+                <template v-if="m.role === 'assistant'">
+                  <span v-if="m.state === 'analyzing' && !m.text" class="chat-typing"><i /><i /><i /></span>
+                  <template v-else>{{ m.text }}<span v-if="m.state === 'error' && m.error" class="chat-err">（{{ m.error }}）</span></template>
+                </template>
+                <template v-else>{{ m.text }}</template>
+              </div>
+              <!-- 状态行 -->
+              <div v-if="m.role === 'assistant'" class="chat-msg__state">
+                <template v-if="m.state === 'generating'">
+                  <span class="chat-typing chat-typing--inline"><i /><i /><i /></span> 正在按提示词重新绘制…
+                </template>
+                <template v-else-if="m.state === 'done'">✅ 已生成，点击图片可在左侧画布查看</template>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 空态引导 -->
+        <div v-else class="side-empty">
+          <span class="side-empty__icon">💬</span>
+          <p>{{ sourceImage ? '图片已就绪，输入修改要求开始修图' : '上传一张图片开始您的AI修图之旅~' }}</p>
+          <button class="side-empty__demo" type="button" :disabled="uploading" @click="pickFile">
+            {{ uploading ? '正在上传…' : '选择图片' }} <i>⬆</i>
+          </button>
+          <small class="side-empty__tip">中转站暂不支持图生图，将按对话分析出的提示词重新绘制整张图</small>
+        </div>
+
+        <!-- 快捷指令（有消息时显示在流底部） -->
+        <div v-if="chat.length" class="side-quick">
+          <button
+            v-for="q in QUICK_ACTIONS"
+            :key="q"
+            class="side-quick__chip"
+            type="button"
+            :disabled="sending"
+            @click="applyQuick(q)"
+          >{{ q }}</button>
+        </div>
       </div>
 
       <!-- 输入区 -->
@@ -249,30 +464,30 @@ onMounted(loadModels)
           class="side-input__field"
           rows="2"
           maxlength="500"
-          placeholder="描述想要的画面效果，将按文字重新生成"
+          placeholder="描述想要的修改效果，如：把裙子换成粉色"
           @keydown.enter.exact.prevent="send"
         />
         <div class="side-input__bar">
           <button class="bar-btn" type="button" title="选择图片" :disabled="uploading" @click="pickFile">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
           </button>
-          <!-- 模型选择：型号来自后端图片能力配置 -->
+          <!-- 分析模型选择（Chat-xs 对话模型） -->
           <div class="bar-model-wrap">
-            <button class="bar-model" type="button" :disabled="!models.length" @click="modelOpen = !modelOpen">
-              <span class="bar-model__avatar">🏆</span>
-              {{ currentModelLabel }}
+            <button class="bar-model" type="button" @click="chatModelOpen = !chatModelOpen; modelOpen = false">
+              <span class="bar-model__avatar">🤖</span>
+              {{ chatModelLabel }}
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
             </button>
-            <ul v-if="modelOpen" class="bar-model__menu">
-              <li v-for="item in models" :key="item.value">
+            <ul v-if="chatModelOpen" class="bar-model__menu">
+              <li v-for="item in chatModels" :key="item.value">
                 <button
                   class="bar-model__item"
-                  :class="{ 'is-active': item.value === modelValue }"
+                  :class="{ 'is-active': item.value === chatModel }"
                   type="button"
-                  @click="pickModel(item.value)"
+                  @click="pickChatModel(item.value)"
                 >
                   <strong>{{ item.label }}</strong>
-                  <small>{{ item.desc }}</small>
+                  <small>分析模型 · {{ item.desc }}</small>
                 </button>
               </li>
             </ul>
@@ -348,25 +563,63 @@ onMounted(loadModels)
 .tool-btn--zoom { min-width: 52px; justify-content: center; background: rgba(255, 255, 255, .08); color: #e8eaf2; }
 .tool-divider { width: 1px; height: 18px; background: rgba(255, 255, 255, .12); }
 
-/* ---------------- 右侧面板 ---------------- */
-.editor-side { display: flex; flex-direction: column; gap: 14px; width: 340px; flex: 0 0 340px; padding: 14px; border-left: 1px solid rgba(255, 255, 255, .08); background: #12162a; }
+/* ---------------- 右侧对话面板 ---------------- */
+.editor-side { display: flex; flex-direction: column; gap: 0; width: 380px; flex: 0 0 380px; border-left: 1px solid rgba(255, 255, 255, .08); background: #12162a; min-height: 0; }
 
-.side-project { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(255, 255, 255, .04); color: inherit; cursor: pointer; text-align: left; transition: all .2s ease; }
-.side-project:hover { border-color: rgba(124, 92, 255, .6); background: rgba(124, 92, 255, .1); }
-.side-project__icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 10px; background: linear-gradient(135deg, #7c5cff, #a855f7); color: #fff; }
-.side-project__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.side-project__text strong { font-size: 13px; }
-.side-project__text small { color: #8b93a8; font-size: 11px; }
-.side-project > svg { color: #8b93a8; }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.side-head__title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.side-head__avatar { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 10px; background: linear-gradient(135deg, #7c5cff, #a855f7); font-size: 16px; }
+.side-head__title strong { display: block; font-size: 13px; }
+.side-head__title small { display: block; color: #8b93a8; font-size: 10.5px; }
 
-.side-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #8b93a8; }
+/* 对话消息流 */
+.side-chat { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 14px; }
+.side-chat:empty { display: none; }
+
+.chat-msg { display: flex; gap: 8px; align-items: flex-start; }
+.chat-msg--user { flex-direction: row-reverse; }
+.chat-msg__avatar { width: 26px; height: 26px; flex: 0 0 auto; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; background: rgba(255, 255, 255, .07); }
+.chat-msg--user .chat-msg__avatar { background: rgba(124, 92, 255, .3); }
+.chat-msg__col { display: flex; flex-direction: column; gap: 6px; max-width: 86%; min-width: 0; }
+.chat-msg--user .chat-msg__col { align-items: flex-end; }
+
+.chat-msg__img { display: block; width: 132px; padding: 0; border: 1px solid rgba(255, 255, 255, .14); border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .2s ease, transform .2s ease; background: #0b0e18; }
+.chat-msg__img:hover { border-color: rgba(124, 92, 255, .8); transform: translateY(-1px); }
+.chat-msg__img img { display: block; width: 100%; height: auto; }
+
+.chat-msg__bubble { padding: 9px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+.chat-msg--user .chat-msg__bubble { background: linear-gradient(135deg, #7c5cff, #a855f7); color: #fff; border-top-right-radius: 4px; }
+.chat-msg--ai .chat-msg__bubble { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); border-top-left-radius: 4px; }
+.chat-msg__bubble--error { border-color: rgba(239, 68, 68, .5) !important; }
+.chat-err { color: #f87171; }
+
+.chat-msg__state { font-size: 11px; color: #8b93a8; display: inline-flex; align-items: center; gap: 6px; }
+
+/* 输入中动画 */
+.chat-typing { display: inline-flex; gap: 4px; padding: 4px 0; }
+.chat-typing--inline { padding: 0; }
+.chat-typing i { width: 5px; height: 5px; border-radius: 50%; background: #a855f7; animation: chat-blink 1.2s infinite; }
+.chat-typing i:nth-child(2) { animation-delay: .2s; }
+.chat-typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes chat-blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+/* 快捷指令 chips */
+.side-quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+.side-quick__chip { padding: 5px 11px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px; background: rgba(255, 255, 255, .04); color: #cfd4e4; font-size: 11.5px; cursor: pointer; transition: all .18s ease; }
+.side-quick__chip:hover:not(:disabled) { border-color: rgba(124, 92, 255, .7); background: rgba(124, 92, 255, .14); color: #fff; }
+.side-quick__chip:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 空态引导 */
+.side-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #8b93a8; padding: 20px; }
 .side-empty__icon { font-size: 34px; opacity: .8; }
 .side-empty p { margin: 0; font-size: 13px; }
+.side-empty__tip { color: #6b7288; font-size: 11px; text-align: center; line-height: 1.6; }
 .side-empty__demo { display: inline-flex; align-items: center; gap: 5px; padding: 8px 16px; border: 0; border-radius: 999px; background: linear-gradient(92deg, #7c5cff, #a855f7); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s ease; box-shadow: 0 6px 18px rgba(124, 92, 255, .35); }
 .side-empty__demo:hover { filter: brightness(1.1); }
 .side-empty__demo i { font-style: normal; }
 
-.side-input { padding: 12px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px; background: rgba(255, 255, 255, .04); transition: border-color .2s ease; }
+/* 输入区 */
+.side-input { margin: 0 14px 14px; padding: 12px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px; background: rgba(255, 255, 255, .04); transition: border-color .2s ease; }
 .side-input:focus-within { border-color: rgba(124, 92, 255, .7); }
 .side-input__field { display: block; width: 100%; border: 0; background: transparent; resize: none; color: #e8eaf2; font-size: 12.5px; line-height: 1.6; }
 .side-input__field:focus { outline: none; }
@@ -381,7 +634,8 @@ onMounted(loadModels)
 
 /* 模型下拉菜单 */
 .bar-model-wrap { position: relative; }
-.bar-model__menu { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30; width: 240px; max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 12px; background: #191e33; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+.bar-model__menu { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30; width: 250px; max-height: 240px; overflow-y: auto; padding: 6px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 12px; background: #191e33; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); }
+.side-head .bar-model__menu { left: auto; right: 0; bottom: calc(100% + 8px); }
 .bar-model__menu li { list-style: none; }
 .bar-model__item { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: #cfd4e4; text-align: left; cursor: pointer; transition: background .18s ease; }
 .bar-model__item:hover { background: rgba(255, 255, 255, .07); color: #fff; }
@@ -403,7 +657,7 @@ onMounted(loadModels)
   .editor { flex-direction: column; height: auto; min-height: 100%; overflow: auto; }
   .editor-canvas { min-height: 72vh; }
   .editor-side { width: auto; flex: none; border-left: 0; border-top: 1px solid rgba(255, 255, 255, .08); }
-  .side-empty { padding: 40px 0; }
+  .side-chat { min-height: 40vh; }
   .stage-title { font-size: 30px; }
 }
 </style>
