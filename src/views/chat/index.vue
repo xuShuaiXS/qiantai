@@ -132,15 +132,19 @@ function findInBag(sessionId: number, id: number) {
   return bagOf(sessionId).find((m) => m.id === id)
 }
 
-function parseStoredImages(raw?: string): string[] {
+function parseStoredImages(raw?: string | string[]): string[] {
   if (!raw) return []
-  try {
-    const v = JSON.parse(raw)
-    const list = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x) : []
-    return resolveMediaUrls(list)
-  } catch {
-    return []
+  // 兼容两种历史数据形态：JSON 字符串（go-admin 契约）与已解析数组
+  let list: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      list = JSON.parse(raw)
+    } catch {
+      return []
+    }
   }
+  if (!Array.isArray(list)) return []
+  return resolveMediaUrls(list.filter((x): x is string => typeof x === 'string' && !!x))
 }
 
 function toApiContent(m: ChatMessage): string | ChatContentPart[] {

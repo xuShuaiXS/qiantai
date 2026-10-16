@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import * as imageApi from '@/api/imageGeneration'
 import type { ImageTask } from '@/api/imageGeneration'
@@ -174,12 +174,60 @@ function createForm(): ImageGenForm {
 
 /* ------------------------------ Store ------------------------------ */
 
+/** 结果持久化：按用户隔离；刷新/重进后历史不丢（后端暂无生图历史接口，先落本地） */
+const RESULTS_KEY = 'jiguang_image_gen_results'
+const MAX_PERSISTED = 60
+
+function currentUser(): string {
+  try {
+    return localStorage.getItem('jiguang_current_username') || 'admin'
+  } catch {
+    return 'admin'
+  }
+}
+
+function resultsKey(): string {
+  return `${RESULTS_KEY}_${currentUser()}`
+}
+
+function loadPersistedResults(): ImageTask[] {
+  try {
+    const raw = localStorage.getItem(resultsKey())
+    if (!raw) return []
+    const list = JSON.parse(raw)
+    if (!Array.isArray(list)) return []
+    // generating/pending 的任务刷新后无意义，只恢复已完成与失败的
+    return list.filter(
+      (t): t is ImageTask =>
+        !!t &&
+        typeof t.id === 'string' &&
+        (t.status === 'success' || t.status === 'failed') &&
+        Array.isArray(t.images),
+    ).slice(0, MAX_PERSISTED)
+  } catch {
+    return []
+  }
+}
+
 export const useImageGenerationStore = defineStore('image-generation', () => {
   const form = reactive<ImageGenForm>(createForm())
-  /** 结果记录：仅本次会话（后端未提供生图历史接口，前端内存态展示） */
-  const results = ref<ImageTask[]>([])
+  /** 结果记录：localStorage 持久化，刷新/重进不丢 */
+  const results = ref<ImageTask[]>(loadPersistedResults())
   const submitting = ref(false)
   const error = ref<string>('')
+
+  watch(
+    results,
+    (list) => {
+      try {
+        const done = list.filter((t) => t.status === 'success' || t.status === 'failed').slice(0, MAX_PERSISTED)
+        localStorage.setItem(resultsKey(), JSON.stringify(done))
+      } catch {
+        /* 存储满等异常忽略 */
+      }
+    },
+    { deep: true },
+  )
 
   /* -------- 图片模型（来自后端配置，非本地写死） -------- */
   const models = ref<ImageModelOption[]>([])
