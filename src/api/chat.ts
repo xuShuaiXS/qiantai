@@ -122,6 +122,8 @@ export interface ChatSessionItem {
   id: number
   title: string
   modelId: string
+  /** 智能体会话关联的智能体 id；普通模型对话为空 */
+  agentId?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -141,11 +143,17 @@ export interface ChatSessionDetail extends ChatSessionItem {
   messages: ChatSessionMessage[]
 }
 
-export function listChatSessions(limit = 50) {
-  return apiJSON<ChatSessionItem[]>(`/chat/sessions?limit=${limit}`)
+export function listChatSessions(limit = 50, agentId?: number) {
+  const qs = new URLSearchParams({ limit: String(limit) })
+  if (agentId != null) qs.set('agentId', String(agentId))
+  return apiJSON<ChatSessionItem[]>(`/chat/sessions?${qs.toString()}`)
 }
 
-export function createChatSession(payload?: { title?: string; modelId?: string }) {
+export function createChatSession(payload?: {
+  title?: string
+  modelId?: string
+  agentId?: number
+}) {
   return apiJSON<ChatSessionItem>('/chat/sessions', {
     method: 'POST',
     body: JSON.stringify(payload || {}),
@@ -224,7 +232,9 @@ export async function streamChat(opts: {
 
   if (res.status === 401) {
     clearToken()
-    if (REQUIRE_LOGIN) {
+    // 公开工具页不跳登录：与 handleUnauthorized 的豁免保持一致，避免打断浏览
+    const onPublicTool = PUBLIC_TOOL_PREFIXES.some((p) => location.pathname.startsWith(p))
+    if (REQUIRE_LOGIN && !onPublicTool) {
       location.href = `/login?redirect=${encodeURIComponent(location.pathname)}`
       throw new Error('登录已失效，请重新登录')
     }

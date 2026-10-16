@@ -3,21 +3,19 @@ import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import '@/assets/css/agents.css'
 import { fetchModelFamilies, streamChat } from '@/api/chat'
+import {
+  appendChatMessages,
+  createChatSession,
+  deleteChatSession,
+  getChatSession,
+  listChatSessions,
+  type ChatSessionItem,
+} from '@/api/chat'
 import { getToken } from '@/api/auth'
 import { renderMarkdown } from '@/utils/markdown'
 import type { AgentItem } from '@/api/agents'
 import { getAgent } from '@/api/agents'
 import BaseSelect from '@/components/BaseSelect.vue'
-import {
-  createSession,
-  deleteSession,
-  formatSessionTime,
-  getSession,
-  listSessions,
-  saveSession,
-  type AgentSession,
-  type SessionMessage,
-} from '@/api/agentSessions'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,10 +36,10 @@ let abort: AbortController | null = null
 
 const msgsEl = ref<HTMLElement | null>(null)
 
-/* ---------------- 会话管理 ---------------- */
+/* ---------------- 会话管理（服务端存储，跨设备/刷新不丢） ---------------- */
 
-const sessions = ref<AgentSession[]>([])
-const activeSession = ref<AgentSession | null>(null)
+const sessions = ref<ChatSessionItem[]>([])
+const activeSessionId = ref<number | null>(null)
 
 /** 可选模型：Chat-xs（providerCode=gpt-xs）旗下的对话模型；拉取失败时回退为当前模型一项 */
 const modelOptions = ref<{ value: string; label: string; desc?: string }[]>([])
@@ -74,10 +72,6 @@ async function loadModels() {
     // 当前模型不在可选列表时，自动切到第一个可选模型
     if (!finalOptions.some((o) => o.value === activeModelId.value) && finalOptions[0]) {
       activeModelId.value = finalOptions[0].value
-      if (activeSession.value) {
-        activeSession.value.modelId = activeModelId.value
-        saveSession(activeSession.value)
-      }
     }
   } catch {
     fallback()
@@ -86,55 +80,93 @@ async function loadModels() {
 
 function onModelChange(modelId: string) {
   activeModelId.value = modelId
-  if (activeSession.value) {
-    activeSession.value.modelId = modelId
-    saveSession(activeSession.value)
+  // 模型 id 随每条消息落库（appendMessages），会话的当前模型随之更新
+  const s = sessions.value.find((x) => x.id === activeSessionId.value)
+  if (s) s.modelId = modelId
+}
+
+async function refreshSessionList() {
+  if (!agent.value) return
+  try {
+    sessions.value = await listChatSessions(50, agent.value.id)
+  } catch {
+    /* 会话列表拉取失败不打断对话，保留现状 */
   }
 }
 
-function refreshSessionList() {
-  if (agent.value) sessions.value = listSessions(agent.value.id)
-}
-
-/** 打开会话：渲染其消息并同步到地址栏，刷新后可恢复 */
-function openSession(session: AgentSession, syncUrl = true) {
-  activeSession.value = session
-  messages.value = session.messages
-  activeModelId.value = session.modelId || activeModelId.value
+/** 打开会话：拉详情渲染消息并同步到地址栏 */
+async function openSession(s: ChatSessionItem, syncUrl = true) {
+  activeSessionId.value = s.id
+  activeModelId.value = s.modelId || activeModelId.value
+  messages.value = []
   if (syncUrl) {
-    router.replace({ query: { ...route.query, s: session.id } }).catch(() => {})
+    router.replace({ query: { ...route.query, s: String(s.id) } }).catch(() => {})
+  }
+  try {
+    const detail = await getChatSession(s.id)
+    messages.value = (detail.messages || [])
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    activeModelId.value = detail.modelId || activeModelId.value
+  } catch {
+    /* 详情拉取失败显示空会话，不影响发新消息 */
   }
   nextTick(scrollToBottom)
 }
 
-function newSession() {
+async function newSession() {
   if (!agent.value) return
   // 当前已是空会话时不重复新建
-  if (activeSession.value && activeSession.value.messages.length === 0) return
-  const session = createSession(agent.value.id, activeModelId.value || agent.value.modelId)
-  refreshSessionList()
-  openSession(session)
+  if (activeSessionId.value != null && messages.value.length === 0) return
+  try {
+    const s = await createChatSession({
+      agentId: agent.value.id,
+      modelId: activeModelId.value || agent.value.modelId,
+    })
+    sessions.value.unshift(s)
+    openSession(s)
+  } catch {
+    /* 建会话失败时下次发消息会再试 */
+  }
 }
 
-function onSelectSession(id: string) {
-  if (activeSession.value?.id === id) return
+async function onSelectSession(id: number) {
+  if (activeSessionId.value === id) return
   abort?.abort()
-  const session = getSession(id)
-  if (session) openSession(session)
+  const s = sessions.value.find((x) => x.id === id)
+  if (s) await openSession(s)
 }
 
-function onRemoveSession(id: string) {
+async function onRemoveSession(id: number) {
   if (!confirm('确定删除该会话？删除后不可恢复。')) return
-  deleteSession(id)
-  refreshSessionList()
-  if (activeSession.value?.id === id) {
+  try {
+    await deleteChatSession(id)
+  } catch {
+    /* 删除失败保留条目 */
+  }
+  await refreshSessionList()
+  if (activeSessionId.value === id) {
     abort?.abort()
-    activeSession.value = null
+    activeSessionId.value = null
     messages.value = []
-    const next = sessions.value[0]
-    if (next) openSession(next)
+    if (sessions.value[0]) await openSession(sessions.value[0])
     else router.replace({ query: { ...route.query, s: undefined } }).catch(() => {})
   }
+}
+
+function relativeTime(ts: string | number): string {
+  const t = typeof ts === 'string' ? new Date(ts).getTime() : ts
+  const diff = Date.now() - t
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}小时前`
+  const d = new Date(t)
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return '昨天'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 /* ---------------- 页面加载 ---------------- */
@@ -163,14 +195,15 @@ async function load() {
       if (first) agent.value.modelId = first
     }
     activeModelId.value = agent.value.modelId || ''
-    refreshSessionList()
+    await refreshSessionList()
 
-    // 恢复会话：优先地址栏指定的，其次最近一个，都没有则不建（首条消息发出时才落库）
-    const wanted = typeof route.query.s === 'string' ? getSession(route.query.s) : null
-    if (wanted && wanted.agentId === agent.value.id) {
-      openSession(wanted, false)
+    // 恢复会话：优先地址栏指定的，其次最近一个，都没有则不建（首条消息发出时才创建）
+    const wantedId = typeof route.query.s === 'string' ? Number(route.query.s) : NaN
+    const wanted = Number.isFinite(wantedId) ? sessions.value.find((x) => x.id === wantedId) : null
+    if (wanted) {
+      await openSession(wanted, false)
     } else if (sessions.value[0]) {
-      openSession(sessions.value[0], false)
+      await openSession(sessions.value[0], false)
     }
 
     loadModels()
@@ -183,27 +216,33 @@ async function load() {
 
 /* ---------------- 发送 ---------------- */
 
+async function ensureSession(): Promise<ChatSessionItem | null> {
+  if (activeSessionId.value != null) {
+    return sessions.value.find((x) => x.id === activeSessionId.value) || null
+  }
+  if (!agent.value) return null
+  try {
+    const s = await createChatSession({
+      agentId: agent.value.id,
+      modelId: activeModelId.value || agent.value.modelId,
+    })
+    sessions.value.unshift(s)
+    activeSessionId.value = s.id
+    router.replace({ query: { ...route.query, s: String(s.id) } }).catch(() => {})
+    return s
+  } catch {
+    return null
+  }
+}
+
 async function send() {
   const text = input.value.trim()
   if (!text || sending.value || !agent.value) return
 
-  // 首条消息发出时才创建会话并落库
-  if (!activeSession.value) {
-    const session = createSession(agent.value.id, activeModelId.value || agent.value.modelId)
-    activeSession.value = session
-    messages.value = session.messages
-    refreshSessionList()
-    router.replace({ query: { ...route.query, s: session.id } }).catch(() => {})
-  }
+  const session = await ensureSession()
 
-  const session = activeSession.value
-  const now = Date.now()
-  messages.value.push({ role: 'user', content: text, time: now } as SessionMessage)
-  if (session.title === '新会话') session.title = text.slice(0, 20) || '新会话'
-  session.modelId = activeModelId.value
+  messages.value.push({ role: 'user', content: text })
   input.value = ''
-  saveSession(session)
-  refreshSessionList()
   await nextTick()
   scrollToBottom()
 
@@ -233,10 +272,14 @@ async function send() {
     }
   } finally {
     sending.value = false
-    // 回合结束统一落库（含失败/中止的占位内容）
-    if (activeSession.value) {
-      saveSession(activeSession.value)
-      refreshSessionList()
+    // 回合结束统一落库（用户消息 + 助手回复），标题由后端按首条用户消息生成
+    if (session) {
+      appendChatMessages(session.id, [
+        { role: 'user', content: text },
+        { role: 'assistant', content: placeholder.content, modelId: activeModelId.value },
+      ])
+        .then(() => refreshSessionList())
+        .catch(() => {})
     }
     await nextTick()
     scrollToBottom()
@@ -314,11 +357,11 @@ async function onMdClick(e: MouseEvent) {
           v-for="s in sessions"
           :key="s.id"
           class="agent-side__item"
-          :class="{ 'is-active': activeSession?.id === s.id }"
+          :class="{ 'is-active': activeSessionId === s.id }"
           @click="onSelectSession(s.id)"
         >
           <span class="agent-side__title">{{ s.title }}</span>
-          <span class="agent-side__time">{{ formatSessionTime(s.updatedAt) }}</span>
+          <span class="agent-side__time">{{ relativeTime(s.updatedAt) }}</span>
           <span
             class="agent-side__del"
             title="删除会话"
@@ -395,7 +438,7 @@ async function onMdClick(e: MouseEvent) {
           <button v-if="sending" class="agent-chat__send" @click="stop">停止</button>
           <button v-else class="agent-chat__send" :disabled="!input.trim()" @click="send">发送</button>
         </div>
-        <p class="agent-chat__hint">内容由 AI 生成，请注意甄别准确性 · 对话记录已自动保存，下次进入可继续</p>
+        <p class="agent-chat__hint">内容由 AI 生成，请注意甄别准确性 · 对话记录已云端保存，下次进入可继续</p>
       </footer>
     </div>
   </div>

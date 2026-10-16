@@ -71,7 +71,15 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
     if (token.value && !user.value) {
-      await fetchProfile()
+      const profile = await fetchProfile()
+      // 本地 token 已失效（如后端切换导致旧令牌验不过）：清掉后用默认账号重新静默登录
+      if (!profile && !token.value) {
+        try {
+          await login(AUTO_LOGIN_USERNAME, AUTO_LOGIN_PASSWORD)
+        } catch {
+          /* 静默失败 */
+        }
+      }
     }
     bootstrapped.value = true
     return isLoggedIn.value
