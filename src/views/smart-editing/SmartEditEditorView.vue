@@ -15,12 +15,13 @@
  *   4. 生成结果进入对话与画布，可撤销/恢复
  *   识图失败时自动降级为纯文本分析；未上传图片则指令直接作为生图提示词。
  */
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useMessage } from '@/composables/useMessage'
 import { createImageTask, fetchImageModels, uploadImage } from '@/api/imageGeneration'
 import { fetchModelFamilies, streamChat } from '@/api/chat'
 import { getToken } from '@/api/auth'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import { downloadImage } from '@/utils/download'
 
 const message = useMessage()
 
@@ -47,34 +48,22 @@ function pickModel(value) {
   modelOpen.value = false
 }
 
-/* ---------------- 对话模型（Chat-xs，识图分析用） ---------------- */
-const chatModels = ref([])
+/* ---------------- 分析模型（Chat-xs 对话模型，识图分析用；内部自动选定） ---------------- */
 const chatModel = ref('glm-5.3-flash')
-const chatModelOpen = ref(false)
-const chatModelLabel = computed(
-  () => chatModels.value.find((item) => item.value === chatModel.value)?.label || chatModel.value || '分析模型',
-)
 
-async function loadChatModels() {
+async function loadChatModel() {
   if (!getToken()) return
   try {
     const families = await fetchModelFamilies()
     const options = families
       .filter((f) => f.providerCode === 'gpt-xs' && f.capability === 'chat')
-      .flatMap((f) => (f.variants || []).map((v) => ({ value: v.modelId, label: v.name, desc: f.name })))
-    if (options.length) {
-      chatModels.value = options
-      if (!options.some((item) => item.value === chatModel.value)) {
-        chatModel.value = options[0].value
-      }
-    }
+      .flatMap((f) => (f.variants || []).map((v) => v.modelId))
+    // 优先 glm-5.3-flash，否则取第一个
+    if (options.includes('glm-5.3-flash')) chatModel.value = 'glm-5.3-flash'
+    else if (options.length) chatModel.value = options[0]
   } catch {
-    /* 分析模型拉取失败时用默认 glm-5.3-flash */
+    /* 拉取失败时用默认 glm-5.3-flash */
   }
-}
-function pickChatModel(value) {
-  chatModel.value = value
-  chatModelOpen.value = false
 }
 
 /* ---------------- 画布与历史 ---------------- */
@@ -170,9 +159,57 @@ const QUICK_ACTIONS = [
   '换一套白色西装',
 ]
 
-const chat = ref([])
+/* ---------------- 对话记录持久化（localStorage，按用户隔离） ---------------- */
+const CHAT_STORE_KEY = 'jiguang_smart_edit_chat'
+const CHAT_MAX = 100
+
+function chatStoreKey() {
+  let user = 'admin'
+  try {
+    user = localStorage.getItem('jiguang_current_username') || 'admin'
+  } catch {
+    /* ignore */
+  }
+  return `${CHAT_STORE_KEY}_${user}`
+}
+
+function loadStoredChat() {
+  try {
+    const raw = localStorage.getItem(chatStoreKey())
+    if (!raw) return []
+    const list = JSON.parse(raw)
+    if (!Array.isArray(list)) return []
+    // 只恢复有效消息（忽略生成中未完成的）
+    return list
+      .filter(
+        (m) =>
+          m &&
+          (m.role === 'user' || m.role === 'assistant') &&
+          (typeof m.text === 'string' || typeof m.imageUrl === 'string'),
+      )
+      .filter((m) => m.role !== 'assistant' || m.state === 'done' || m.state === 'error')
+      .slice(-CHAT_MAX)
+  } catch {
+    return []
+  }
+}
+
+function persistChat() {
+  try {
+    const done = chat.value
+      .filter((m) => m.role === 'user' || m.state === 'done' || m.state === 'error')
+      .slice(-CHAT_MAX)
+    localStorage.setItem(chatStoreKey(), JSON.stringify(done))
+  } catch {
+    /* 存储满等异常忽略 */
+  }
+}
+
+const chat = ref(loadStoredChat())
 const chatEl = ref(null)
 const instruction = ref('')
+
+watch(chat, persistChat, { deep: true })
 
 function scrollBottom() {
   nextTick(() => {
@@ -247,7 +284,7 @@ async function send() {
 
     // 2) 提取【生图提示词】（无标记则将全文作为提示词）
     const matched = ai.text.match(/【生图提示词】\s*([\s\S]+)/)
-    const prompt = (matched ? matched[1] : ai.text).trim().slice(0, 900)
+    const prompt = (matched?.[1] ?? ai.text).trim().slice(0, 900)
     ai.prompt = prompt || text
     ai.state = 'generating'
     scrollBottom()
@@ -264,8 +301,11 @@ async function send() {
       ai.error = task.errorMessage || '生成失败，请稍后重试'
     } else {
       ai.state = 'done'
-      ai.imageUrl = task.images[0].url
-      pushHistory(task.images[0].url)
+      const first = task.images[0]
+      if (first) {
+        ai.imageUrl = first.url
+        pushHistory(first.url)
+      }
     }
   } catch (err) {
     ai.state = 'error'
@@ -294,7 +334,7 @@ function newProject() {
 
 onMounted(() => {
   loadModels()
-  loadChatModels()
+  loadChatModel()
 })
 </script>
 
@@ -358,7 +398,7 @@ onMounted(() => {
 
     <!-- 右侧：对话面板 -->
     <aside class="editor-side">
-      <!-- 面板头：标题 + 生图模型 -->
+      <!-- 面板头：标题 -->
       <header class="side-head">
         <div class="side-head__title">
           <span class="side-head__avatar">🎨</span>
@@ -366,27 +406,6 @@ onMounted(() => {
             <strong>智能修图助手</strong>
             <small>上传图片，描述修改要求</small>
           </div>
-        </div>
-        <!-- 生图模型选择 -->
-        <div class="bar-model-wrap">
-          <button class="bar-model" type="button" :disabled="!models.length" @click="modelOpen = !modelOpen; chatModelOpen = false">
-            <span class="bar-model__avatar">🖼</span>
-            {{ currentModelLabel }}
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-          </button>
-          <ul v-if="modelOpen" class="bar-model__menu">
-            <li v-for="item in models" :key="item.value">
-              <button
-                class="bar-model__item"
-                :class="{ 'is-active': item.value === modelValue }"
-                type="button"
-                @click="pickModel(item.value)"
-              >
-                <strong>{{ item.label }}</strong>
-                <small>生图模型 · {{ item.desc }}</small>
-              </button>
-            </li>
-          </ul>
         </div>
       </header>
 
@@ -401,16 +420,26 @@ onMounted(() => {
           >
             <div class="chat-msg__avatar">{{ m.role === 'user' ? '🧑' : '🎨' }}</div>
             <div class="chat-msg__col">
-              <!-- 消息附图（用户原图 / AI 生成结果），点击同步到左侧画布 -->
-              <button
-                v-if="m.imageUrl"
-                class="chat-msg__img"
-                type="button"
-                :title="'在左侧画布中查看'"
-                @click="showOnCanvas(m.imageUrl)"
-              >
-                <img :src="m.imageUrl" alt="消息图片" loading="lazy" />
-              </button>
+              <!-- 消息附图（用户原图 / AI 生成结果）：点击同步画布，可下载 -->
+              <div v-if="m.imageUrl" class="chat-msg__imgwrap">
+                <button
+                  class="chat-msg__img"
+                  type="button"
+                  :title="'在左侧画布中查看'"
+                  @click="showOnCanvas(m.imageUrl)"
+                >
+                  <img :src="m.imageUrl" alt="消息图片" loading="lazy" />
+                </button>
+                <button
+                  class="chat-msg__dl"
+                  type="button"
+                  title="下载到本地"
+                  @click.stop="downloadImage(m.imageUrl)"
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+                  下载
+                </button>
+              </div>
               <!-- 文本：AI 分析（流式）/ 用户指令 / 错误信息 -->
               <div
                 v-if="m.role === 'assistant' ? (m.text || m.state === 'analyzing' || m.error) : m.text"
@@ -471,23 +500,23 @@ onMounted(() => {
           <button class="bar-btn" type="button" title="选择图片" :disabled="uploading" @click="pickFile">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
           </button>
-          <!-- 分析模型选择（Chat-xs 对话模型） -->
+          <!-- 生图模型选择（Pic-xs 等图片能力模型） -->
           <div class="bar-model-wrap">
-            <button class="bar-model" type="button" @click="chatModelOpen = !chatModelOpen; modelOpen = false">
-              <span class="bar-model__avatar">🤖</span>
-              {{ chatModelLabel }}
+            <button class="bar-model" type="button" :disabled="!models.length" @click="modelOpen = !modelOpen">
+              <span class="bar-model__avatar">🖼</span>
+              {{ currentModelLabel }}
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
             </button>
-            <ul v-if="chatModelOpen" class="bar-model__menu">
-              <li v-for="item in chatModels" :key="item.value">
+            <ul v-if="modelOpen" class="bar-model__menu">
+              <li v-for="item in models" :key="item.value">
                 <button
                   class="bar-model__item"
-                  :class="{ 'is-active': item.value === chatModel }"
+                  :class="{ 'is-active': item.value === modelValue }"
                   type="button"
-                  @click="pickChatModel(item.value)"
+                  @click="pickModel(item.value)"
                 >
                   <strong>{{ item.label }}</strong>
-                  <small>分析模型 · {{ item.desc }}</small>
+                  <small>生图模型 · {{ item.desc }}</small>
                 </button>
               </li>
             </ul>
@@ -583,9 +612,19 @@ onMounted(() => {
 .chat-msg__col { display: flex; flex-direction: column; gap: 6px; max-width: 86%; min-width: 0; }
 .chat-msg--user .chat-msg__col { align-items: flex-end; }
 
+.chat-msg__imgwrap { position: relative; display: inline-block; }
 .chat-msg__img { display: block; width: 132px; padding: 0; border: 1px solid rgba(255, 255, 255, .14); border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .2s ease, transform .2s ease; background: #0b0e18; }
 .chat-msg__img:hover { border-color: rgba(124, 92, 255, .8); transform: translateY(-1px); }
 .chat-msg__img img { display: block; width: 100%; height: auto; }
+.chat-msg__dl {
+  position: absolute; right: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px;
+  height: 26px; padding: 0 10px; border: none; border-radius: 999px;
+  background: rgba(23, 36, 44, 0.75); color: #fff; font-size: 11px; cursor: pointer;
+  opacity: 0; transform: translateY(5px); transition: all .2s ease; backdrop-filter: blur(4px);
+}
+.chat-msg__imgwrap:hover .chat-msg__dl { opacity: 1; transform: translateY(0); }
+.chat-msg__dl:hover { background: linear-gradient(135deg, #7c5cff, #a855f7); }
+@media (hover: none) { .chat-msg__dl { opacity: 1; transform: none; } } /* 触屏设备常显 */
 
 .chat-msg__bubble { padding: 9px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
 .chat-msg--user .chat-msg__bubble { background: linear-gradient(135deg, #7c5cff, #a855f7); color: #fff; border-top-right-radius: 4px; }
