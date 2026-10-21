@@ -57,7 +57,7 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
 }
 
 /** 公开工具页：401 时不踢去登录页（页面可匿名浏览，失败由页面自行提示） */
-const PUBLIC_TOOL_PREFIXES = ['/image-generation', '/smart-editing', '/ai-draw', '/agents']
+const PUBLIC_TOOL_PREFIXES = ['/image-generation', '/smart-editing', '/ai-draw', '/agents', '/ai-canvas']
 
 async function handleUnauthorized(body: { code?: number; message?: string }) {
   if (body?.code === 40100 || body?.code === 40102 || body?.code === 40103) {

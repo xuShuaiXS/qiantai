@@ -58,6 +58,8 @@ export function createVideoTask(data: {
   resolution?: string
   ratio?: string
   duration?: number
+  /** 首帧图（图生视频）：站内 /uploads 路径或远端图片地址 */
+  imageUrl?: string
 }) {
   return apiJSON<VideoTask>('/chat/media/generations', {
     method: 'POST',

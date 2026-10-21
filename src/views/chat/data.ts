@@ -185,7 +185,8 @@ export const navSections: NavSection[] = [
         name: "AI画布",
         key: "canvas",
         icon: "https://img.alicdn.com/imgextra/i1/1818153824/O1CN01QJQ3Nk1e7RfBBFoy0_!!1818153824.png",
-        dot: true,
+        page: true,
+        route: "/ai-canvas",
       },
       {
         name: "图片处理",

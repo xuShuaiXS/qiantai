@@ -129,6 +129,24 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+
+  /*
+   * 「AI 画布」栏目：节点式 AI 工作流画布（无限画布 + 节点 + 连线 + 右侧「灵感画板」对话）。
+   * 沿用 ToolsShell 外壳；v1 本地优先（localStorage 持久化），后端仅复用 /chat/images/generations 与 /chat/completions。
+   */
+  {
+    path: '/ai-canvas',
+    component: () => import('@/views/tools/ToolsShell.vue'),
+    meta: { public: true, shell: 'tools' },
+    children: [
+      {
+        path: '',
+        name: 'AiCanvas',
+        component: () => import('@/views/ai-canvas/AiCanvasView.vue'),
+        meta: { title: 'AI 画布 - 极光AI', public: true },
+      },
+    ],
+  },
 ]
 
 export default routes
